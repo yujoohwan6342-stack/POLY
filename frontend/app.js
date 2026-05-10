@@ -299,7 +299,193 @@ async function pageReferrals() {
     : `<div class="empty">${t('referrals.no_referrals')}</div>`;
 }
 
-function pageTrading() {
+async function pageTrading() {
+  const main = document.getElementById('main');
+  main.innerHTML = `<div class="card"><div class="empty">${t('common.loading')}</div></div>`;
+
+  let cfg, stats, openPos, history;
+  try {
+    [cfg, stats, openPos, history] = await Promise.all([
+      api('/api/trading/config'),
+      api('/api/trading/stats'),
+      api('/api/trading/positions'),
+      api('/api/trading/history?limit=20'),
+    ]);
+  } catch (e) { console.error(e); showToast(t('common.error')); return; }
+
+  const selectedStrategy = cfg.strategy || localStorage.getItem('streak_preset') || 'lead';
+  const ms = stats.market_state || {};
+  const closeTs = ms.current_close ? new Date(ms.current_close) : null;
+  const sideBadge = (s) => s === 'YES'
+    ? `<span style="background:rgba(34,197,94,.15); color:#22c55e; padding:2px 8px; border-radius:8px; font-size:11px; font-weight:600;">YES</span>`
+    : `<span style="background:rgba(239,68,68,.15); color:#ef4444; padding:2px 8px; border-radius:8px; font-size:11px; font-weight:600;">NO</span>`;
+  const pnlPill = (v) => {
+    const cls = v >= 0 ? 'pos' : 'neg';
+    const sign = v >= 0 ? '+' : '';
+    const color = v >= 0 ? '#22c55e' : '#ef4444';
+    return `<span style="color:${color}; font-weight:700;">${sign}$${Math.abs(v).toFixed(2)}</span>`;
+  };
+
+  main.innerHTML = `
+    <h1>${t('trading.title')}</h1>
+
+    <section class="card hero">
+      <div class="row between">
+        <div>
+          <div class="label">${t('trading.bot_status')}</div>
+          <div class="value sm" style="margin-top:4px;">
+            ${cfg.active
+              ? `<span style="color:#22c55e;">● ${t('trading.running')}</span>`
+              : `<span style="color:var(--text-3);">● ${t('trading.stopped')}</span>`}
+          </div>
+          ${ms.current_market_id ? `
+            <div class="sub" style="margin-top:8px; font-size:12px;">
+              ${t('trading.current_market')}: <strong>BTC ≥ $${(ms.current_strike || 0).toLocaleString()}</strong>
+              ${closeTs ? ` · <span id="td-cd">${t('trading.next_cycle')}: <span id="td-cd-num">…</span></span>` : ''}
+            </div>` : ''}
+        </div>
+        <div>
+          ${cfg.active
+            ? `<button class="btn sm danger" id="btn-trade-stop">${t('trading.stop_btn')}</button>`
+            : `<button class="btn sm" id="btn-trade-start">${t('trading.start_btn')} →</button>`}
+        </div>
+      </div>
+      <p style="margin:12px 0 0; font-size:12px; color:var(--text-2);">${t('trading.auto_desc')}</p>
+    </section>
+
+    <section class="grid-2" style="margin-top:12px;">
+      <div class="card"><div class="label">${t('trading.stats_total')}</div><div class="value sm">${stats.total_trades}</div></div>
+      <div class="card"><div class="label">${t('trading.stats_winrate')}</div><div class="value sm">${(stats.win_rate*100).toFixed(0)}%</div></div>
+      <div class="card"><div class="label">${t('trading.stats_pnl')}</div><div class="value sm">${pnlPill(stats.total_pnl)}</div></div>
+      <div class="card"><div class="label">${t('trading.stats_consumed')}</div><div class="value sm">${cfg.cycles_consumed}</div></div>
+    </section>
+
+    ${(state.user.tokens < (state.config.cost_per_cycle || 1)) ? `
+      <section class="card" style="border-left:3px solid var(--neg, #ef4444); margin-top:12px;">
+        <p style="margin:0;">⚠ ${t('trading.need_tokens')}</p>
+        <button class="btn ghost sm" id="btn-need-go" style="margin-top:8px;">→ ${t('referrals.title')}</button>
+      </section>
+    ` : ''}
+
+    <section style="margin-top:24px;">
+      <h2>${t('trading.strategy_presets')}</h2>
+      <div class="card ${selectedStrategy==='low'?'preset-active':''}" data-pick="low" style="cursor:pointer;">
+        <div class="row between">
+          <h3 style="margin:0;">🎯 ${t('trading.preset_low')}</h3>
+          ${selectedStrategy==='low' ? `<span style="color:#22c55e;">✓</span>`:''}
+        </div>
+        <p style="font-size:13px; color:var(--text-2); margin:6px 0 0;">${t('trading.preset_low_desc')}</p>
+      </div>
+      <div class="card ${selectedStrategy==='lead'?'preset-active':''}" data-pick="lead" style="cursor:pointer; margin-top:8px;">
+        <div class="row between">
+          <h3 style="margin:0;">📈 ${t('trading.preset_lead')}</h3>
+          ${selectedStrategy==='lead' ? `<span style="color:#22c55e;">✓</span>`:''}
+        </div>
+        <p style="font-size:13px; color:var(--text-2); margin:6px 0 0;">${t('trading.preset_lead_desc')}</p>
+      </div>
+    </section>
+
+    <section style="margin-top:24px;">
+      <h2>${t('trading.open_positions')}</h2>
+      ${openPos.length === 0
+        ? `<div class="card"><div class="empty">${t('trading.no_open')}</div></div>`
+        : openPos.map(p => `
+          <div class="card">
+            <div class="row between">
+              <div>
+                <div style="font-size:13px; color:var(--text-2);">${p.market_label}</div>
+                <div style="margin-top:4px;">${sideBadge(p.side)} <span style="font-size:12px; color:var(--text-3);">@ $${p.entry_price.toFixed(2)} · ${p.size.toFixed(0)} sh</span></div>
+              </div>
+              <div style="font-size:11px; color:var(--text-3); text-align:right;">${p.strategy}</div>
+            </div>
+          </div>`).join('')}
+    </section>
+
+    <section style="margin-top:24px;">
+      <h2>${t('trading.history_title')}</h2>
+      ${history.length === 0
+        ? `<div class="card"><div class="empty">${t('trading.no_history')}</div></div>`
+        : `<div class="tx-list">${history.map(p => `
+            <div class="tx-item">
+              <div>
+                <div>${sideBadge(p.side)} <span style="font-size:12px;">${p.market_label}</span></div>
+                <div class="meta">${new Date(p.closed_at || p.opened_at).toLocaleString()} · ${p.exit_reason === 'win' ? '✓ '+t('trading.win') : '✗ '+t('trading.loss')}</div>
+              </div>
+              <div class="tx-amount ${p.pnl>=0?'pos':'neg'}">${p.pnl>=0?'+':''}$${p.pnl.toFixed(2)}</div>
+            </div>`).join('')}</div>`}
+    </section>
+
+    <section style="margin-top:24px;">
+      <details>
+        <summary style="cursor:pointer; color:var(--text-3); font-size:13px;">${t('trading.advanced_self_host')}</summary>
+        <div class="card" style="margin-top:8px;">
+          <p style="font-size:13px; color:var(--text-2);">${t('trading.setup_desc')}</p>
+          <pre style="background:var(--bg-2); padding:10px; border-radius:8px; font-size:11px; overflow-x:auto; word-break:break-all; white-space:pre-wrap;">curl -sSL https://raw.githubusercontent.com/yujoohwan6342-stack/POLY/main/bot/deploy.sh | bash</pre>
+          <a href="https://github.com/yujoohwan6342-stack/POLY" target="_blank" style="font-size:13px;">${t('deploy.more_info')} →</a>
+        </div>
+      </details>
+    </section>
+  `;
+
+  // ─── handlers ────────────────────────────────────────
+  const startBtn = document.getElementById('btn-trade-start');
+  const stopBtn = document.getElementById('btn-trade-stop');
+  if (startBtn) startBtn.onclick = async () => {
+    const strat = localStorage.getItem('streak_preset') || selectedStrategy || 'lead';
+    try {
+      await api('/api/trading/start', {
+        method: 'POST',
+        body: JSON.stringify({ strategy: strat, max_cycles: 0 }),
+      });
+      showToast('✓ ' + t('trading.running'));
+      pageTrading();
+    } catch (e) {
+      if (e.status === 402) showToast(t('trading.need_tokens'));
+      else showToast(e.message || t('common.error'));
+    }
+  };
+  if (stopBtn) stopBtn.onclick = async () => {
+    try {
+      await api('/api/trading/stop', { method: 'POST' });
+      showToast(t('trading.stopped'));
+      pageTrading();
+    } catch (e) { showToast(e.message); }
+  };
+  main.querySelectorAll('[data-pick]').forEach(el => {
+    el.onclick = async () => {
+      const pick = el.dataset.pick;
+      localStorage.setItem('streak_preset', pick);
+      if (cfg.active) {
+        try {
+          await api('/api/trading/start', {
+            method: 'POST',
+            body: JSON.stringify({ strategy: pick, max_cycles: cfg.max_cycles }),
+          });
+        } catch (e) { showToast(e.message); }
+      }
+      pageTrading();
+    };
+  });
+  const needGo = document.getElementById('btn-need-go');
+  if (needGo) needGo.onclick = () => navigate('referrals');
+
+  // countdown
+  if (closeTs) {
+    const cd = document.getElementById('td-cd-num');
+    const tick = () => {
+      if (!document.body.contains(cd)) return;
+      const left = Math.max(0, Math.floor((closeTs - new Date()) / 1000));
+      const m = Math.floor(left / 60).toString().padStart(2,'0');
+      const s = (left % 60).toString().padStart(2,'0');
+      cd.textContent = `${m}:${s}`;
+      if (left > 0) setTimeout(tick, 1000);
+      else setTimeout(() => { if (state.page === 'trading') pageTrading(); }, 5000);
+    };
+    tick();
+  }
+}
+
+function pageTradingOLD() {
   const main = document.getElementById('main');
   const savedBotUrl = localStorage.getItem('streak_bot_url') || '';
   const savedPreset = localStorage.getItem('streak_preset') || '';

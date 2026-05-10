@@ -21,7 +21,7 @@ from slowapi.errors import RateLimitExceeded
 
 from sqlmodel import Session, select, func
 
-from . import config, auth, tokens, referrals
+from . import config, auth, tokens, referrals, trading
 from .db import init_db, engine
 from .models import User, Cycle
 
@@ -42,6 +42,8 @@ async def lifespan(app: FastAPI):
     """startup/shutdown."""
     init_db()
     log.info("DB initialized")
+    trading.start_runner()
+    log.info("trading cycle runner started")
     yield
     log.info("shutting down")
 
@@ -66,6 +68,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(tokens.router)
 app.include_router(referrals.router)
+app.include_router(trading.router)
 
 
 @app.get("/api/health")
