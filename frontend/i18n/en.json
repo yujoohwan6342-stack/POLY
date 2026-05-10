@@ -20,9 +20,9 @@
     "by_signing": "By signing, you agree to our Terms of Use"
   },
   "home": {
-    "balance_label": "Token balance",
-    "cycles_left": "{n} cycles available",
-    "topup": "Top up",
+    "balance_label": "Markets available",
+    "cycles_left": "{n} markets",
+    "topup": "Get more",
     "invite": "Invite friends",
     "earned_today": "Earned today",
     "earned_total": "Total P&L",
@@ -33,19 +33,21 @@
     "deploy_guide": "Run on your server / VPS in one command"
   },
   "wallet": {
-    "title": "My Cycles",
+    "title": "My Markets",
     "your_address": "Your address",
-    "balance": "Cycle balance",
-    "earn_title": "Earn more cycles",
+    "balance": "Markets available",
+    "balance_unit": "markets",
+    "balance_hint": "1 market = 1 trade on Polymarket BTC 5-min",
+    "earn_title": "Get more markets",
     "earn_invite": "Invite friends",
-    "earn_invite_desc": "+{tokens} cycles per direct invite",
+    "earn_invite_desc": "+{tokens} markets per direct invite",
     "earn_referred": "Get invited",
-    "earn_referred_desc": "Use someone's code at signup → +{tokens} cycles",
+    "earn_referred_desc": "Use someone's code at signup → +{tokens} markets",
     "earn_ads": "Watch ads",
     "earn_ads_desc": "Coming soon",
     "copy": "Copy",
     "copied": "Copied!",
-    "history": "Cycle history",
+    "history": "Activity",
     "no_history": "No activity yet"
   },
   "home_counter": {
@@ -57,11 +59,11 @@
     "your_code": "Your referral code",
     "your_link": "Your invite link",
     "copy_link": "Copy link",
-    "earn_l1": "+{tokens} tokens per direct referral",
-    "earn_l2": "+{tokens} tokens when your referrals invite others",
+    "earn_l1": "+{tokens} markets per direct referral",
+    "earn_l2": "+{tokens} markets when your referrals invite others",
     "stats_direct": "Direct invites",
     "stats_indirect": "Indirect invites",
-    "stats_earned": "Tokens earned",
+    "stats_earned": "Markets earned",
     "tree_title": "Your network",
     "no_referrals": "No referrals yet — share your link to start"
   },
@@ -77,7 +79,7 @@
     "save": "Save",
     "cancel": "Cancel",
     "close": "Close",
-    "tokens": "tokens"
+    "tokens": "markets"
   },
   "deploy": {
     "title": "Deploy Bot",

@@ -179,8 +179,8 @@ async function pageWallet() {
     <h1>${t('wallet.title')}</h1>
     <section class="card hero">
       <div class="label">${t('wallet.balance')}</div>
-      <div class="value">${state.user.tokens.toLocaleString()}</div>
-      <div class="sub">${state.user.tokens} ${t('common.tokens')}</div>
+      <div class="value">${state.user.tokens.toLocaleString()} <span style="font-size:14px; opacity:0.8;">${t('wallet.balance_unit')}</span></div>
+      <div class="sub">${t('wallet.balance_hint')}</div>
     </section>
     <section class="card">
       <div class="label">${t('wallet.your_address')}</div>
