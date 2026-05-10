@@ -347,22 +347,96 @@ function render() {
 }
 
 function renderConnectScreen() {
+  // 첫 화면: 로그인 강요 X. 둘러보기 가능 + 액션 누르면 로그인 모달.
   const main = document.getElementById('main');
   main.innerHTML = `
-    <div class="connect-screen">
-      <div class="logo">STREAK</div>
-      <div class="tagline">${t('tagline')}</div>
-      <div class="counter" style="margin: 32px 0;">
-        <div class="label"><span class="live-dot"></span>${t('home_counter.label')}</div>
-        <div class="number" id="counter-num">0</div>
-        <div class="subtitle">${t('home_counter.subtitle')}</div>
+    <section style="padding: 32px 0 16px; text-align: center;">
+      <div style="font-size: 32px; font-weight: 800; letter-spacing: 0.18em;">STREAK</div>
+      <div style="color: var(--text-3); margin-top: 4px; font-size: 13px;">${t('tagline')}</div>
+    </section>
+
+    <section class="counter">
+      <div class="label"><span class="live-dot"></span>${t('home_counter.label')}</div>
+      <div class="number" id="counter-num">0</div>
+      <div class="subtitle">${t('home_counter.subtitle')}</div>
+    </section>
+
+    <section style="padding: 0 4px;">
+      <h2 style="font-size: 22px; line-height: 1.3; letter-spacing: -0.02em;">${t('landing.hero_title')}</h2>
+      <p style="font-size: 14px; color: var(--text-2); margin-bottom: 16px;">${t('landing.hero_sub')}</p>
+      <button class="btn" id="btn-start">${t('landing.cta_start')} →</button>
+    </section>
+
+    <section style="margin-top: 32px;">
+      <div class="grid-2" style="grid-template-columns: 1fr; gap: 12px;">
+        <div class="card">
+          <h3 style="color: var(--text);">⚡ ${t('landing.feature_1_title')}</h3>
+          <p style="margin: 4px 0 0; font-size: 13px;">${t('landing.feature_1_desc')}</p>
+        </div>
+        <div class="card">
+          <h3 style="color: var(--text);">📊 ${t('landing.feature_2_title')}</h3>
+          <p style="margin: 4px 0 0; font-size: 13px;">${t('landing.feature_2_desc')}</p>
+        </div>
+        <div class="card">
+          <h3 style="color: var(--text);">🎁 ${t('landing.feature_3_title')}</h3>
+          <p style="margin: 4px 0 0; font-size: 13px;">${t('landing.feature_3_desc')}</p>
+        </div>
       </div>
-      <button class="btn" id="btn-connect">🦊 ${t('auth.connect')}</button>
-      <p style="margin-top:24px; font-size:12px; color:var(--text-3);">${t('auth.by_signing')}</p>
+    </section>
+
+    <section style="margin-top: 32px;">
+      <h2>${t('landing.how_title')}</h2>
+      <div class="card">
+        <ol style="margin: 0; padding-left: 22px; color: var(--text-2); line-height: 2;">
+          <li>${t('landing.step_1')}</li>
+          <li>${t('landing.step_2')}</li>
+          <li>${t('landing.step_3')}</li>
+          <li>${t('landing.step_4')}</li>
+        </ol>
+      </div>
+    </section>
+
+    <section style="margin-top: 24px; text-align: center;">
+      <button class="btn ghost" id="btn-connect-bottom">🦊 ${t('auth.connect')}</button>
+      <p style="margin-top: 12px; font-size: 11px; color: var(--text-3);">${t('auth.by_signing')}</p>
+    </section>
+  `;
+  const trigger = () => requireLoginAndConnect();
+  document.getElementById('btn-start').onclick = trigger;
+  document.getElementById('btn-connect-bottom').onclick = trigger;
+  startCounter();
+}
+
+function requireLoginAndConnect() {
+  // 모달로 로그인 권유 (강요 X — Maybe later 옵션)
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000; padding: 24px; backdrop-filter: blur(4px);
+  `;
+  overlay.innerHTML = `
+    <div style="background: var(--bg); border-radius: 20px; padding: 28px;
+                max-width: 360px; width: 100%; box-shadow: var(--shadow-lg);">
+      <div style="text-align: center; font-size: 40px; margin-bottom: 8px;">🦊</div>
+      <h2 style="margin: 0 0 6px; text-align: center;">${t('auth.login_required')}</h2>
+      <p style="text-align: center; color: var(--text-3); margin: 0 0 20px; font-size: 13px;">
+        ${t('auth.login_required_desc')}
+      </p>
+      <div class="col" style="gap: 8px;">
+        <button class="btn" id="modal-connect">${t('auth.connect')}</button>
+        <button class="btn ghost" id="modal-later">${t('auth.later')}</button>
+      </div>
     </div>
   `;
-  document.getElementById('btn-connect').onclick = connectWallet;
-  startCounter();
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.onclick = (e) => { if (e.target === overlay) close(); };
+  overlay.querySelector('#modal-later').onclick = close;
+  overlay.querySelector('#modal-connect').onclick = async () => {
+    close();
+    await connectWallet();
+  };
 }
 
 // 누적 가입자 카운터 — 자동 증가 애니메이션 + 폴링
