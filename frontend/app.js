@@ -175,21 +175,13 @@ async function pageHome() {
       </section>
     ` : ''}
     <section class="grid-2">
+      <button class="btn ghost" id="btn-go-trading">📈 ${t('nav.trading')}</button>
       <button class="btn ghost" id="btn-invite">🎁 ${t('home.invite')}</button>
-      <button class="btn ghost" id="btn-deploy">⚙ ${t('home.deploy_bot')}</button>
-    </section>
-    <section>
-      <div class="card">
-        <h3>${t('deploy.title')}</h3>
-        <p>${t('deploy.description')}</p>
-        <pre>curl -sSL https://raw.githubusercontent.com/yujoohwan6342-stack/POLY/main/bot/deploy.sh | bash</pre>
-        <a href="https://github.com/yujoohwan6342-stack/POLY" target="_blank">${t('deploy.more_info')} →</a>
-      </div>
     </section>
   `;
   if (isAnon) document.getElementById('btn-upgrade').onclick = signInGoogle;
   document.getElementById('btn-invite').onclick = () => navigate('referrals');
-  document.getElementById('btn-deploy').onclick = () => navigate('settings');
+  document.getElementById('btn-go-trading').onclick = () => navigate('trading');
 }
 
 async function pageWallet() {
@@ -617,16 +609,31 @@ async function pageTrading() {
   const main = document.getElementById('main');
   main.innerHTML = `<div class="card"><div class="empty">${t('common.loading')}</div></div>`;
 
-  let cfg, stats, openPos, history, assets;
-  try {
-    [cfg, stats, openPos, history, assets] = await Promise.all([
-      api('/api/trading/config'),
-      api('/api/trading/stats'),
-      api('/api/trading/positions'),
-      api('/api/trading/history?limit=20'),
-      api('/api/trading/assets'),
-    ]);
-  } catch (e) { console.error(e); showToast(t('common.error')); return; }
+  // 각 endpoint 독립 fallback (서버 미배포여도 페이지가 죽지 않게)
+  const safeApi = async (path, fallback) => {
+    try { return await api(path); }
+    catch (e) { console.warn('api fail', path, e.status, e.body); return fallback; }
+  };
+  const [cfg, stats, openPos, history, assets] = await Promise.all([
+    safeApi('/api/trading/config', {
+      active:false, asset:'BTC', duration_min:5, entry_mode:'low_target',
+      bet_size_usd:1, entry_price:0.10, entry_tolerance:0.01, max_entry_price:0.85,
+      tp_price:0.15, sl_price:0.05, buy_order_type:'limit', sell_order_type:'limit',
+      tradeable_pct:0.60, buy_when_remaining_below_pct:1.0,
+      max_cycles_per_session:0, cycles_consumed:0,
+    }),
+    safeApi('/api/trading/stats', {
+      total_trades:0, wins:0, losses:0, win_rate:0, total_pnl:0,
+      open_count:0, market_state:{},
+    }),
+    safeApi('/api/trading/positions', []),
+    safeApi('/api/trading/history?limit=20', []),
+    safeApi('/api/trading/assets', [
+      {code:'BTC',label:'Bitcoin',icon:'₿',active_durations:[5],coming_soon_durations:[15,60]},
+      {code:'ETH',label:'Ethereum',icon:'Ξ',active_durations:[],coming_soon_durations:[5,15,60]},
+      {code:'SOL',label:'Solana',icon:'◎',active_durations:[],coming_soon_durations:[5,15,60]},
+    ]),
+  ]);
 
   const selectedStrategy = cfg.entry_mode || cfg.strategy || 'low_target';
   tradesLoad();
@@ -850,16 +857,9 @@ async function pageTrading() {
       })()}
     </section>
 
-    <section style="margin-top:24px;">
-      <details>
-        <summary style="cursor:pointer; color:var(--text-3); font-size:13px;">${t('trading.advanced_self_host')}</summary>
-        <div class="card" style="margin-top:8px;">
-          <p style="font-size:13px; color:var(--text-2);">${t('trading.setup_desc')}</p>
-          <pre style="background:var(--bg-2); padding:10px; border-radius:8px; font-size:11px; overflow-x:auto; word-break:break-all; white-space:pre-wrap;">curl -sSL https://raw.githubusercontent.com/yujoohwan6342-stack/POLY/main/bot/deploy.sh | bash</pre>
-          <a href="https://github.com/yujoohwan6342-stack/POLY" target="_blank" style="font-size:13px;">${t('deploy.more_info')} →</a>
-        </div>
-      </details>
-    </section>
+    <footer class="site-footer" style="margin:24px 0 8px; text-align:center; font-size:11px; color:var(--text-3); line-height:1.6;">
+      ${t('disclaimer.footer_short')}
+    </footer>
   `;
 
   // ─── handlers ────────────────────────────────────────
@@ -996,170 +996,6 @@ async function pageTrading() {
   }
 }
 
-function openWalletModal() {
-  const overlay = document.createElement('div');
-  overlay.style.cssText = `position:fixed; inset:0; background:rgba(0,0,0,.6);
-    display:flex; align-items:center; justify-content:center; z-index:1000;
-    padding:16px; backdrop-filter:blur(6px); overflow:auto;`;
-  overlay.innerHTML = `
-    <div style="background:var(--bg); border-radius:20px; padding:24px;
-                max-width:420px; width:100%; box-shadow:var(--shadow-lg); max-height:90vh; overflow:auto;">
-      <h2 style="margin:0 0 8px;">${t('trading.wallet_section')}</h2>
-      <div style="background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.3); border-radius:12px; padding:14px; margin-bottom:16px;">
-        <div style="font-weight:700; color:#ef4444; margin-bottom:8px;">${t('trading.wallet_warn_title')}</div>
-        <ul style="margin:0; padding-left:18px; font-size:12px; line-height:1.6; color:var(--text-2);">
-          <li>${t('trading.wallet_warn_1')}</li>
-          <li>${t('trading.wallet_warn_2')}</li>
-          <li>${t('trading.wallet_warn_3')}</li>
-          <li>${t('trading.wallet_warn_4')}</li>
-        </ul>
-      </div>
-      <div style="margin-bottom:12px;">
-        <label style="font-size:12px; color:var(--text-3);">${t('trading.wallet_pk_label')}</label>
-        <input id="wm-pk" type="password" placeholder="${t('trading.wallet_pk_ph')}"
-               style="width:100%; margin-top:4px; padding:10px 12px; border-radius:10px;
-                      border:1px solid var(--border); background:var(--bg-2); color:var(--text);
-                      font-family:monospace; font-size:12px;" />
-      </div>
-      <div style="margin-bottom:12px;">
-        <label style="font-size:12px; color:var(--text-3);">${t('trading.wallet_funder_label')}</label>
-        <input id="wm-funder" type="text" placeholder="0x..."
-               style="width:100%; margin-top:4px; padding:10px 12px; border-radius:10px;
-                      border:1px solid var(--border); background:var(--bg-2); color:var(--text);
-                      font-family:monospace; font-size:12px;" />
-      </div>
-      <div style="margin-bottom:16px;">
-        <label style="font-size:12px; color:var(--text-3);">${t('trading.wallet_max_trade')}</label>
-        <input id="wm-max" type="number" min="1" max="1000" value="10" step="1"
-               style="width:100%; margin-top:4px; padding:10px 12px; border-radius:10px;
-                      border:1px solid var(--border); background:var(--bg-2); color:var(--text);" />
-      </div>
-      <div class="row" style="gap:8px;">
-        <button class="btn" id="wm-save" style="flex:1;">${t('trading.wallet_save')}</button>
-        <button class="btn ghost" id="wm-cancel">${t('common.cancel')}</button>
-      </div>
-      <button class="btn danger sm" id="wm-remove" style="margin-top:12px; width:100%;">
-        ${t('trading.wallet_remove')}
-      </button>
-    </div>`;
-  document.body.appendChild(overlay);
-  const close = () => overlay.remove();
-  overlay.onclick = (e) => { if (e.target === overlay) close(); };
-  overlay.querySelector('#wm-cancel').onclick = close;
-  overlay.querySelector('#wm-save').onclick = async () => {
-    const pk = overlay.querySelector('#wm-pk').value.trim();
-    const funder = overlay.querySelector('#wm-funder').value.trim() || null;
-    const max = parseFloat(overlay.querySelector('#wm-max').value) || 10;
-    if (pk.replace(/^0x/, '').length !== 64) { showToast(t('trading.wallet_pk_label')); return; }
-    try {
-      await api('/api/wallet/set', {
-        method: 'POST',
-        body: JSON.stringify({ private_key: pk, funder_address: funder, max_trade_usd: max }),
-      });
-      showToast('✓ ' + t('trading.wallet_saved'));
-      close();
-      if (state.page === 'trading') pageTrading();
-    } catch (e) { showToast(e.body || e.message); }
-  };
-  overlay.querySelector('#wm-remove').onclick = async () => {
-    try {
-      await api('/api/wallet/remove', { method: 'DELETE' });
-      showToast(t('trading.wallet_removed'));
-      close();
-      if (state.page === 'trading') pageTrading();
-    } catch (e) { showToast(e.message); }
-  };
-}
-
-function pageTradingOLD() {
-  const main = document.getElementById('main');
-  const savedBotUrl = localStorage.getItem('streak_bot_url') || '';
-  const savedPreset = localStorage.getItem('streak_preset') || '';
-  const deployCmd = 'curl -sSL https://raw.githubusercontent.com/yujoohwan6342-stack/POLY/main/bot/deploy.sh | bash';
-  main.innerHTML = `
-    <h1>${t('trading.title')}</h1>
-
-    <section class="card">
-      <div class="row between">
-        <div>
-          <div class="label">${t('trading.bot_status')}</div>
-          <div class="value sm" id="bot-status-text" style="margin-top:4px;">
-            <span style="color:var(--text-3);">● ${t('trading.not_connected')}</span>
-          </div>
-        </div>
-        <button class="btn sm ghost" id="btn-check-bot">↻</button>
-      </div>
-    </section>
-
-    <section class="card">
-      <h3>${t('trading.connect_existing')}</h3>
-      <input id="bot-url-input" class="input" type="url"
-             placeholder="${t('trading.bot_url_placeholder')}"
-             value="${savedBotUrl}"
-             style="width:100%; margin:8px 0; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:var(--bg-2); color:var(--text);" />
-      <button class="btn" id="btn-open-dash">${t('trading.open_dashboard')} →</button>
-    </section>
-
-    <section class="card" style="border-left:3px solid var(--primary);">
-      <h3>⚙ ${t('trading.setup_title')}</h3>
-      <p style="color:var(--text-2); font-size:13px;">${t('trading.setup_desc')}</p>
-      <ol style="padding-left:18px; font-size:13px; color:var(--text-2); line-height:1.7;">
-        <li>${t('trading.setup_step1')}</li>
-        <li>${t('trading.setup_step2')}</li>
-      </ol>
-      <pre style="background:var(--bg-2); padding:12px; border-radius:8px; font-size:11px; overflow-x:auto; word-break:break-all; white-space:pre-wrap;">${deployCmd}</pre>
-      <button class="btn sm ghost" id="btn-copy-cmd">📋 ${t('wallet.copy')}</button>
-      <p style="color:var(--text-2); font-size:13px; margin-top:12px;">${t('trading.setup_step3')}</p>
-      <a href="https://github.com/yujoohwan6342-stack/POLY" target="_blank" style="font-size:13px;">${t('deploy.more_info')} →</a>
-    </section>
-
-    <section>
-      <h2 style="margin-top:24px;">${t('trading.strategy_presets')}</h2>
-      <div class="card ${savedPreset==='low'?'preset-active':''}" data-preset="low">
-        <h3>🎯 ${t('trading.preset_low')}</h3>
-        <p style="font-size:13px; color:var(--text-2);">${t('trading.preset_low_desc')}</p>
-        <button class="btn sm ${savedPreset==='low'?'':'ghost'}" data-save-preset="low">
-          ${savedPreset==='low' ? '✓ ' : ''}${t('trading.save_preset')}
-        </button>
-      </div>
-      <div class="card ${savedPreset==='lead'?'preset-active':''}" data-preset="lead" style="margin-top:12px;">
-        <h3>📈 ${t('trading.preset_lead')}</h3>
-        <p style="font-size:13px; color:var(--text-2);">${t('trading.preset_lead_desc')}</p>
-        <button class="btn sm ${savedPreset==='lead'?'':'ghost'}" data-save-preset="lead">
-          ${savedPreset==='lead' ? '✓ ' : ''}${t('trading.save_preset')}
-        </button>
-      </div>
-    </section>
-  `;
-
-  document.getElementById('btn-copy-cmd').onclick = () => copy(deployCmd, 'Copied!');
-  document.getElementById('btn-open-dash').onclick = () => {
-    const url = document.getElementById('bot-url-input').value.trim();
-    if (!url) { showToast(t('trading.bot_url_placeholder')); return; }
-    localStorage.setItem('streak_bot_url', url);
-    window.open(url, '_blank');
-  };
-  document.getElementById('btn-check-bot').onclick = async () => {
-    const url = (document.getElementById('bot-url-input').value || savedBotUrl).trim();
-    const el = document.getElementById('bot-status-text');
-    if (!url) { el.innerHTML = `<span style="color:var(--text-3);">● ${t('trading.not_connected')}</span>`; return; }
-    el.innerHTML = `<span style="color:var(--text-3);">… ${t('auth.connecting')}</span>`;
-    try {
-      await fetch(url.replace(/\/$/, '') + '/health', { mode: 'no-cors' });
-      el.innerHTML = `<span style="color:var(--pos, #22c55e);">● ${t('trading.connected')}</span>`;
-    } catch {
-      el.innerHTML = `<span style="color:var(--neg, #ef4444);">● ${t('trading.not_connected')}</span>`;
-    }
-  };
-  main.querySelectorAll('[data-save-preset]').forEach(b => {
-    b.onclick = () => {
-      localStorage.setItem('streak_preset', b.dataset.savePreset);
-      showToast('✓ ' + t('trading.save_preset'));
-      pageTrading();
-    };
-  });
-}
-
 function pageSettings() {
   const main = document.getElementById('main');
   const isAnon = state.user.auth_method === 'anonymous';
@@ -1195,8 +1031,7 @@ function pageSettings() {
     </section>
 
     <section class="card">
-      <h3 style="color:var(--neg);">${t('settings.danger_zone')}</h3>
-      <button class="btn danger" id="btn-logout">${t('settings.disconnect')}</button>
+      <button class="btn ghost" id="btn-logout" style="width:100%;">↩ ${t('nav.logout')}</button>
     </section>
 
     <footer class="site-footer" style="margin:24px 0 8px; text-align:center; font-size:11px; color:var(--text-3); line-height:1.6;">
@@ -1267,9 +1102,17 @@ function startCounter() {
 function renderLanding() {
   const main = document.getElementById('main');
   main.innerHTML = `
-    <section style="padding: 32px 0 16px; text-align:center;">
-      <div style="font-size: 32px; font-weight: 800; letter-spacing: 0.18em;">STREAK</div>
-      <div style="color: var(--text-3); margin-top: 4px; font-size: 13px;">${t('tagline')}</div>
+    <section style="padding: 40px 0 24px; text-align:center;">
+      <svg viewBox="0 0 64 64" width="56" height="56" style="margin-bottom:12px;" aria-hidden="true">
+        <defs><linearGradient id="lgrad" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stop-color="#3182f6"/><stop offset="1" stop-color="#1b64da"/>
+        </linearGradient></defs>
+        <rect width="64" height="64" rx="16" fill="url(#lgrad)"/>
+        <path d="M18 42 L28 26 L36 36 L46 20" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <circle cx="46" cy="20" r="4" fill="white"/>
+      </svg>
+      <div style="font-size: 30px; font-weight: 800; letter-spacing: 0.16em;">STREAK</div>
+      <div style="color: var(--text-3); margin-top: 6px; font-size: 13px;">${t('tagline')}</div>
     </section>
     <section class="counter">
       <div class="label"><span class="live-dot"></span>${t('home_counter.label')}</div>

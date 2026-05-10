@@ -7,7 +7,7 @@
     "wallet": "钱包",
     "referrals": "推荐",
     "settings": "设置",
-    "logout": "断开连接"
+    "logout": "退出登录"
   },
   "trading": {
     "title": "自动交易",

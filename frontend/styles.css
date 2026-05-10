@@ -78,10 +78,17 @@ button { font-family: inherit; cursor: pointer; }
   border-bottom: 1px solid var(--border);
 }
 .brand {
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: 0.18em;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
   color: var(--text);
+}
+.brand-mark { width: 26px; height: 26px; display: block; flex-shrink: 0; }
+.brand-word {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
 }
 .lang-switch {
   display: flex;
