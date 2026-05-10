@@ -90,8 +90,11 @@ def _build_tree(session: Session, root: User, max_depth: int = 5,
     return node
 
 
+from .auth import get_current_user  # 정상 import (auth가 referrals를 lazy import)
+
+
 @router.get("/tree", response_model=TreeNode)
-def get_tree(user=Depends(__import__("backend.auth", fromlist=["get_current_user"]).get_current_user),
+def get_tree(user: User = Depends(get_current_user),
              session: Session = Depends(get_session)):
     """본인을 루트로 한 추천 트리 반환 (D3 시각화용)."""
     return _build_tree(session, user)
@@ -106,7 +109,7 @@ class ReferralStats(BaseModel):
 
 
 @router.get("/stats", response_model=ReferralStats)
-def get_stats(user=Depends(__import__("backend.auth", fromlist=["get_current_user"]).get_current_user),
+def get_stats(user: User = Depends(get_current_user),
               session: Session = Depends(get_session)):
     direct = session.exec(
         select(User).where(User.referred_by_id == user.id)

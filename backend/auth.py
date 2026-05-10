@@ -12,7 +12,7 @@ from siwe import SiweMessage
 from . import config
 from .db import get_session
 from .models import User, Nonce
-from .referrals import handle_signup_referral, generate_referral_code
+# referrals는 lazy import (circular dep 방지)
 
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -108,11 +108,12 @@ def verify(req: VerifyReq, session: Session = Depends(get_session)):
     address = msg.address.lower()
     user = session.exec(select(User).where(User.address == address)).first()
     if not user:
-        # 신규가입 — 추천 코드 처리 + 가입 보너스
+        # 신규가입 — 추천 코드 처리 + 가입 보너스 (lazy import로 circular 회피)
+        from .referrals import generate_referral_code, handle_signup_referral
         user = User(
             address=address,
             referral_code=generate_referral_code(session),
-            tokens=0,  # signup bonus는 referral handler에서 부여
+            tokens=0,
         )
         session.add(user)
         session.commit()
