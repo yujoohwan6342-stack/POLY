@@ -231,6 +231,12 @@
     "label": "Active accounts now",
     "subtitle": "Total members, last 30 days"
   },
+  "stats": {
+    "today_signups": "joined today",
+    "today_visitors": "visitors today",
+    "total_visits": "total visits",
+    "today_trades": "trades today"
+  },
   "referrals": {
     "title": "Referrals",
     "your_code": "Your referral code",

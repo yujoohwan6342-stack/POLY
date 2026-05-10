@@ -231,6 +231,12 @@
     "label": "지금 거래 중인 계정",
     "subtitle": "최근 30일, 누적 회원 수"
   },
+  "stats": {
+    "today_signups": "오늘 가입",
+    "today_visitors": "오늘 방문자",
+    "total_visits": "누적 방문",
+    "today_trades": "오늘 거래"
+  },
   "referrals": {
     "title": "추천 프로그램",
     "your_code": "내 추천 코드",

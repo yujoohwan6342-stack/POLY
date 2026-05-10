@@ -278,6 +278,14 @@ p  { margin: 0; color: var(--text-2); font-size: 13px; line-height: 1.55; }
   margin-right: 6px; position: relative; top: -1px;
 }
 .counter.bump { animation: counter-bump 0.4s ease-out; }
+.micro-stats {
+  display: flex; flex-wrap: wrap; gap: 6px 10px;
+  margin-top: 10px; font-size: 11px; color: var(--text-3);
+  letter-spacing: -0.005em;
+}
+.micro-stats strong { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.micro-stats .dot-sep { width: 3px; height: 3px; border-radius: 50%; background: var(--text-4); align-self: center; }
+
 @keyframes counter-bump { 0% { transform: scale(1); } 50% { transform: scale(1.04); } 100% { transform: scale(1); } }
 
 /* ─── List rows ───────────────────────────────────── */

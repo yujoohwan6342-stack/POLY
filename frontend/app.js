@@ -1258,18 +1258,32 @@ function render() {
   }
 }
 
-// ─── Counter ─────────────────────────────────────────────────────
+// ─── Counter + visit tracking ────────────────────────────────────
 let _counterTimer = null, _counterTarget = 0, _counterDisplay = 0;
+let _statsCache = null;
+async function fetchPublicStats() {
+  try {
+    const r = await fetch('/api/stats/public').then(x => x.json());
+    _statsCache = r;
+    _counterTarget = r.total_users || 0;
+    return r;
+  } catch { return null; }
+}
+function pingVisit(page) {
+  try {
+    const body = JSON.stringify({ page: page || 'landing', lang: state.lang });
+    fetch('/api/stats/visit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body, keepalive: true,
+    }).catch(()=>{});
+  } catch {}
+}
 function startCounter() {
   if (_counterTimer) clearInterval(_counterTimer);
-  async function fetchTotal() {
-    try {
-      const r = await fetch('/api/stats/public').then(x => x.json());
-      _counterTarget = r.total_users || 0;
-    } catch {}
-  }
-  fetchTotal();
-  setInterval(fetchTotal, 10000);
+  pingVisit('landing');
+  fetchPublicStats().then(applyStatsToLanding);
+  setInterval(() => fetchPublicStats().then(applyStatsToLanding), 15000);
   _counterTimer = setInterval(() => {
     const el = document.getElementById('counter-num');
     if (!el) { clearInterval(_counterTimer); return; }
@@ -1282,6 +1296,24 @@ function startCounter() {
     }
   }, 60);
 }
+function applyStatsToLanding(s) {
+  if (!s) return;
+  const sub = document.getElementById('counter-sub');
+  if (sub) {
+    sub.textContent = `${t('home_counter.subtitle')} · ${(s.today_users||0).toLocaleString()} ${t('home.tokens_unit') || ''}`.trim();
+  }
+  // micro stats line
+  const ms = document.getElementById('micro-stats');
+  if (ms) {
+    ms.innerHTML = `
+      <span><strong>${(s.today_users||0).toLocaleString()}</strong> ${t('stats.today_signups')}</span>
+      <span class="dot-sep"></span>
+      <span><strong>${(s.today_unique||0).toLocaleString()}</strong> ${t('stats.today_visitors')}</span>
+      <span class="dot-sep"></span>
+      <span><strong>${(s.total_visits||0).toLocaleString()}</strong> ${t('stats.total_visits')}</span>
+    `;
+  }
+}
 
 // ─── Landing (로그인 X) ──────────────────────────────────────────
 function renderLanding() {
@@ -1290,7 +1322,8 @@ function renderLanding() {
     <section class="counter">
       <div class="eyebrow"><span class="live-dot"></span>${t('home_counter.label')}</div>
       <div class="num" id="counter-num" style="margin-top:10px;">0</div>
-      <div class="muted" style="margin-top:8px;">${t('home_counter.subtitle')}</div>
+      <div class="muted" id="counter-sub" style="margin-top:8px;">${t('home_counter.subtitle')}</div>
+      <div id="micro-stats" class="micro-stats"></div>
     </section>
 
     <section style="margin-top:8px;">

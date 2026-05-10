@@ -89,6 +89,36 @@ class Position(SQLModel, table=True):
     closed_at: Optional[datetime] = None
 
 
+class Visit(SQLModel, table=True):
+    """방문 기록 — IP+UA 해시로 중복 가벼운 dedup. 30분 윈도우.
+    누적 데이터 핵심: 절대 삭제하지 않고 영구 보관.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    visitor_hash: str = Field(index=True)               # sha256(ip + ua + salt)[:32]
+    user_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
+    page: str = Field(default="landing", index=True)
+    referrer: Optional[str] = Field(default=None)
+    lang: Optional[str] = Field(default=None)
+    country: Optional[str] = Field(default=None)
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+
+class DailyStat(SQLModel, table=True):
+    """매일 자정 기준 누적 스냅샷 — 트렌드 차트용.
+    절대 덮어쓰지 않고 누적: (date) unique 1회 INSERT.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    date: str = Field(index=True, unique=True)          # "YYYY-MM-DD" (UTC)
+    total_users: int = Field(default=0)                 # 누적 회원 수
+    new_users: int = Field(default=0)                   # 당일 신규
+    total_visits: int = Field(default=0)                # 누적 방문
+    daily_visits: int = Field(default=0)                # 당일 방문
+    unique_visitors: int = Field(default=0)             # 당일 고유 방문자
+    total_cycles: int = Field(default=0)                # 누적 거래
+    daily_cycles: int = Field(default=0)                # 당일 거래
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class Cycle(SQLModel, table=True):
     """봇이 보고한 매매 사이클."""
     id: Optional[int] = Field(default=None, primary_key=True)

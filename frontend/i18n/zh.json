@@ -231,6 +231,12 @@
     "label": "正在交易的账户",
     "subtitle": "近 30 天累计会员数"
   },
+  "stats": {
+    "today_signups": "今日加入",
+    "today_visitors": "今日访客",
+    "total_visits": "累计访问",
+    "today_trades": "今日交易"
+  },
   "referrals": {
     "title": "推荐计划",
     "your_code": "您的推荐码",

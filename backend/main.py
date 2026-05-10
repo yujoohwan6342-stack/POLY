@@ -21,7 +21,7 @@ from slowapi.errors import RateLimitExceeded
 
 from sqlmodel import Session, select, func
 
-from . import config, auth, tokens, referrals, trading
+from . import config, auth, tokens, referrals, trading, stats as stats_mod
 from .db import init_db, engine
 from .models import User, Cycle
 
@@ -44,6 +44,22 @@ async def lifespan(app: FastAPI):
     log.info("DB initialized")
     trading.start_runner()
     log.info("trading cycle runner started")
+
+    # 시작 시 어제 스냅샷 보장 + 1시간마다 오늘 스냅샷 갱신
+    async def _daily_snapshot_loop():
+        from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+        while True:
+            try:
+                with Session(engine) as s:
+                    # 어제 분 백필
+                    yest = (_dt.now(_tz.utc).date() - _td(days=1)).isoformat()
+                    stats_mod.ensure_daily_snapshot(s, yest)
+            except Exception as e:
+                log.warning("snapshot loop err: %s", e)
+            await asyncio.sleep(3600)
+
+    asyncio.get_event_loop().create_task(_daily_snapshot_loop())
+    log.info("daily snapshot scheduler started")
     yield
     log.info("shutting down")
 
@@ -69,6 +85,7 @@ app.include_router(auth.router)
 app.include_router(tokens.router)
 app.include_router(referrals.router)
 app.include_router(trading.router)
+app.include_router(stats_mod.router)
 
 
 @app.get("/api/health")
@@ -95,18 +112,6 @@ def public_config():
             "messagingSenderId": config.FIREBASE_MESSAGING_SENDER_ID,
             "appId": config.FIREBASE_APP_ID,
         },
-    }
-
-
-@app.get("/api/stats/public")
-def public_stats():
-    """누적 가입자 수 등 (인증 없이 접근 가능)."""
-    with Session(engine) as session:
-        total_users = session.exec(select(func.count()).select_from(User)).one()
-        total_cycles = session.exec(select(func.count()).select_from(Cycle)).one()
-    return {
-        "total_users": total_users or 0,
-        "total_cycles": total_cycles or 0,
     }
 
 
