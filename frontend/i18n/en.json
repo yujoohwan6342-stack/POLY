@@ -3,10 +3,32 @@
   "tagline": "Automated trading, made simple",
   "nav": {
     "home": "Home",
+    "trading": "Trading",
     "wallet": "Wallet",
     "referrals": "Referrals",
     "settings": "Settings",
     "logout": "Disconnect"
+  },
+  "trading": {
+    "title": "Trading",
+    "bot_status": "Bot status",
+    "not_connected": "Not connected",
+    "connected": "Connected",
+    "setup_title": "Set up your trading bot",
+    "setup_desc": "STREAK runs on your own VPS for maximum security — your private key never leaves your server.",
+    "setup_step1": "1. Get a VPS (Vultr/DigitalOcean, $5/mo plan)",
+    "setup_step2": "2. SSH into the server and run this one command:",
+    "setup_step3": "3. Open the dashboard URL shown at the end and connect your wallet",
+    "deploy_btn": "Deployment guide",
+    "connect_existing": "Already have a bot?",
+    "bot_url_placeholder": "http://your-bot-ip:8765",
+    "open_dashboard": "Open dashboard",
+    "strategy_presets": "Strategy presets",
+    "preset_low": "Low Target (10c → 15c)",
+    "preset_low_desc": "Buy at 10¢, sell at 15¢. Higher risk, low entry.",
+    "preset_lead": "High Lead (70c+)",
+    "preset_lead_desc": "Buy leading side ≥ 70¢, hold to expiry. Backtest +12.8% ROI.",
+    "save_preset": "Save as my default"
   },
   "auth": {
     "connect": "Connect Wallet",

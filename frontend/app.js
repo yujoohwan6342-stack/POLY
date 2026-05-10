@@ -299,6 +299,95 @@ async function pageReferrals() {
     : `<div class="empty">${t('referrals.no_referrals')}</div>`;
 }
 
+function pageTrading() {
+  const main = document.getElementById('main');
+  const savedBotUrl = localStorage.getItem('streak_bot_url') || '';
+  const savedPreset = localStorage.getItem('streak_preset') || '';
+  const deployCmd = 'curl -sSL https://raw.githubusercontent.com/yujoohwan6342-stack/POLY/main/bot/deploy.sh | bash';
+  main.innerHTML = `
+    <h1>${t('trading.title')}</h1>
+
+    <section class="card">
+      <div class="row between">
+        <div>
+          <div class="label">${t('trading.bot_status')}</div>
+          <div class="value sm" id="bot-status-text" style="margin-top:4px;">
+            <span style="color:var(--text-3);">● ${t('trading.not_connected')}</span>
+          </div>
+        </div>
+        <button class="btn sm ghost" id="btn-check-bot">↻</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>${t('trading.connect_existing')}</h3>
+      <input id="bot-url-input" class="input" type="url"
+             placeholder="${t('trading.bot_url_placeholder')}"
+             value="${savedBotUrl}"
+             style="width:100%; margin:8px 0; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:var(--bg-2); color:var(--text);" />
+      <button class="btn" id="btn-open-dash">${t('trading.open_dashboard')} →</button>
+    </section>
+
+    <section class="card" style="border-left:3px solid var(--primary);">
+      <h3>⚙ ${t('trading.setup_title')}</h3>
+      <p style="color:var(--text-2); font-size:13px;">${t('trading.setup_desc')}</p>
+      <ol style="padding-left:18px; font-size:13px; color:var(--text-2); line-height:1.7;">
+        <li>${t('trading.setup_step1')}</li>
+        <li>${t('trading.setup_step2')}</li>
+      </ol>
+      <pre style="background:var(--bg-2); padding:12px; border-radius:8px; font-size:11px; overflow-x:auto; word-break:break-all; white-space:pre-wrap;">${deployCmd}</pre>
+      <button class="btn sm ghost" id="btn-copy-cmd">📋 ${t('wallet.copy')}</button>
+      <p style="color:var(--text-2); font-size:13px; margin-top:12px;">${t('trading.setup_step3')}</p>
+      <a href="https://github.com/yujoohwan6342-stack/POLY" target="_blank" style="font-size:13px;">${t('deploy.more_info')} →</a>
+    </section>
+
+    <section>
+      <h2 style="margin-top:24px;">${t('trading.strategy_presets')}</h2>
+      <div class="card ${savedPreset==='low'?'preset-active':''}" data-preset="low">
+        <h3>🎯 ${t('trading.preset_low')}</h3>
+        <p style="font-size:13px; color:var(--text-2);">${t('trading.preset_low_desc')}</p>
+        <button class="btn sm ${savedPreset==='low'?'':'ghost'}" data-save-preset="low">
+          ${savedPreset==='low' ? '✓ ' : ''}${t('trading.save_preset')}
+        </button>
+      </div>
+      <div class="card ${savedPreset==='lead'?'preset-active':''}" data-preset="lead" style="margin-top:12px;">
+        <h3>📈 ${t('trading.preset_lead')}</h3>
+        <p style="font-size:13px; color:var(--text-2);">${t('trading.preset_lead_desc')}</p>
+        <button class="btn sm ${savedPreset==='lead'?'':'ghost'}" data-save-preset="lead">
+          ${savedPreset==='lead' ? '✓ ' : ''}${t('trading.save_preset')}
+        </button>
+      </div>
+    </section>
+  `;
+
+  document.getElementById('btn-copy-cmd').onclick = () => copy(deployCmd, 'Copied!');
+  document.getElementById('btn-open-dash').onclick = () => {
+    const url = document.getElementById('bot-url-input').value.trim();
+    if (!url) { showToast(t('trading.bot_url_placeholder')); return; }
+    localStorage.setItem('streak_bot_url', url);
+    window.open(url, '_blank');
+  };
+  document.getElementById('btn-check-bot').onclick = async () => {
+    const url = (document.getElementById('bot-url-input').value || savedBotUrl).trim();
+    const el = document.getElementById('bot-status-text');
+    if (!url) { el.innerHTML = `<span style="color:var(--text-3);">● ${t('trading.not_connected')}</span>`; return; }
+    el.innerHTML = `<span style="color:var(--text-3);">… ${t('auth.connecting')}</span>`;
+    try {
+      await fetch(url.replace(/\/$/, '') + '/health', { mode: 'no-cors' });
+      el.innerHTML = `<span style="color:var(--pos, #22c55e);">● ${t('trading.connected')}</span>`;
+    } catch {
+      el.innerHTML = `<span style="color:var(--neg, #ef4444);">● ${t('trading.not_connected')}</span>`;
+    }
+  };
+  main.querySelectorAll('[data-save-preset]').forEach(b => {
+    b.onclick = () => {
+      localStorage.setItem('streak_preset', b.dataset.savePreset);
+      showToast('✓ ' + t('trading.save_preset'));
+      pageTrading();
+    };
+  });
+}
+
 function pageSettings() {
   const main = document.getElementById('main');
   const isAnon = state.user.auth_method === 'anonymous';
@@ -348,6 +437,7 @@ function render() {
   applyI18n();
   switch (state.page) {
     case 'home': pageHome(); break;
+    case 'trading': pageTrading(); break;
     case 'wallet': pageWallet(); break;
     case 'referrals': pageReferrals(); break;
     case 'settings': pageSettings(); break;

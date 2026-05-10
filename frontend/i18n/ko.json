@@ -3,10 +3,32 @@
   "tagline": "심플한 자동 매매",
   "nav": {
     "home": "홈",
+    "trading": "거래",
     "wallet": "지갑",
     "referrals": "추천",
     "settings": "설정",
     "logout": "연결 해제"
+  },
+  "trading": {
+    "title": "자동 거래",
+    "bot_status": "봇 상태",
+    "not_connected": "연결 안됨",
+    "connected": "연결됨",
+    "setup_title": "본인 봇 설치",
+    "setup_desc": "STREAK 봇은 본인 VPS에서 실행됩니다. 프라이빗 키가 메인 서버를 떠나지 않아 가장 안전합니다.",
+    "setup_step1": "1. VPS 준비 (Vultr/DigitalOcean, 월 $5 충분)",
+    "setup_step2": "2. SSH 접속 후 한 줄 명령:",
+    "setup_step3": "3. 표시되는 대시보드 URL 접속 → 지갑 연결 → 자동 매매 시작",
+    "deploy_btn": "설치 가이드",
+    "connect_existing": "이미 봇 있으신가요?",
+    "bot_url_placeholder": "http://본인서버IP:8765",
+    "open_dashboard": "대시보드 열기",
+    "strategy_presets": "전략 프리셋",
+    "preset_low": "Low Target (10c → 15c)",
+    "preset_low_desc": "10센트 매수, 15센트 매도. 리스크 높음, 진입가 낮음.",
+    "preset_lead": "High Lead (70c+)",
+    "preset_lead_desc": "70센트+ 우위 사이드 매수, 만료까지 보유. 백테스트 +12.8% ROI.",
+    "save_preset": "기본값으로 저장"
   },
   "auth": {
     "connect": "지갑 연결",
