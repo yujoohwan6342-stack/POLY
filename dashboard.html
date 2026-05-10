@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>STREAK</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  html, body { overflow-x: hidden; }
+  body {
+    margin: 0; padding: 16px;
+    font-family: -apple-system, "Segoe UI", "Apple SD Gothic Neo", sans-serif;
+    background: #0e1116; color: #e6edf3;
+    max-width: 100vw;
+  }
+  .container { max-width: 1400px; margin: 0 auto; }
+  h1 {
+    font-size: 28px; margin: 0 0 14px;
+    letter-spacing: 0.18em; font-weight: 700;
+  }
+  h1 .sub { font-size: 12px; color: #8b949e; letter-spacing: 0.04em; font-weight: 400; margin-left: 12px; }
+  .grid {
+    display: grid; gap: 14px;
+    grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+  }
+  .grid > * { min-width: 0; }
+  @media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+  .card {
+    background: #161b22; border: 1px solid #30363d;
+    border-radius: 8px; padding: 14px;
+    min-width: 0; overflow: hidden;
+  }
+  .card h2 {
+    font-size: 13px; margin: 0 0 10px; color: #8b949e;
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+
+  .num-input { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+  .num-input label { flex: 0 0 130px; font-size: 13px; color: #c9d1d9; }
+  .num-input .stepper {
+    display: flex; align-items: center;
+    background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+    overflow: hidden;
+  }
+  .num-input .stepper button {
+    background: #21262d; color: #e6edf3; border: none;
+    width: 30px; height: 32px; font-size: 16px; cursor: pointer;
+  }
+  .num-input .stepper button:hover { background: #30363d; }
+  .num-input .stepper input {
+    background: transparent; color: #e6edf3; border: none;
+    text-align: center; width: 70px; height: 32px; font-size: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+  .num-input .stepper input:focus { outline: none; }
+  .num-input .suffix { font-size: 12px; color: #8b949e; min-width: 14px; }
+
+  details { margin-top: 12px; }
+  details summary {
+    cursor: pointer; padding: 6px 0; color: #8b949e; font-size: 12px;
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  details[open] summary { color: #c9d1d9; }
+  .advanced .num-input label { font-size: 12px; color: #8b949e; }
+  .advanced .num-input .stepper input { width: 60px; }
+
+  button.action {
+    cursor: pointer; padding: 10px 16px; border-radius: 6px;
+    border: 1px solid #30363d; background: #21262d; color: #e6edf3;
+    font-size: 13px; font-weight: 500; flex: 1;
+  }
+  button.action:hover { background: #30363d; }
+  button.primary { background: #238636; border-color: #2ea043; }
+  button.primary:hover { background: #2ea043; }
+  button.danger { background: #8b1f1f; border-color: #c93030; }
+  button.danger:hover { background: #c93030; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 10px; margin-bottom: 14px;
+  }
+  @media (max-width: 1200px) { .stat-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 700px)  { .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .stat {
+    background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+    padding: 12px; min-width: 0; overflow: hidden;
+  }
+  .stat .label { font-size: 11px; color: #8b949e; text-transform: uppercase; }
+  .stat .value {
+    font-size: 22px; font-weight: 600; margin-top: 4px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .stat .sub {
+    font-size: 11px; color: #8b949e; margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .pnl-pos, .delta-pos { color: #3fb950; }
+  .pnl-neg, .delta-neg { color: #f85149; }
+
+  .status-bar {
+    background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+    padding: 10px 14px; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    min-width: 0; overflow: hidden;
+  }
+  .status-bar > span { min-width: 0; max-width: 100%; }
+  #marketSlug, #marketTitle { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 400px; }
+  .chart-box { width: 100%; height: 220px; position: relative; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; word-wrap: break-word; }
+  th, td { padding: 6px 8px; text-align: left; border-bottom: 1px solid #21262d; }
+  th { color: #8b949e; font-weight: 500; text-transform: uppercase; font-size: 11px; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .badge { padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 500; }
+  .badge.up { background: #1a3d1f; color: #3fb950; }
+  .badge.down { background: #3d1a1a; color: #f85149; }
+  .badge.tp { background: #1a3d1f; color: #3fb950; }
+  .badge.tp_mkt { background: #1a3d1f; color: #3fb950; }
+  .badge.sl { background: #3d1a1a; color: #f85149; }
+  .badge.expiry { background: #3d2f1a; color: #d29922; }
+
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot.on { background: #3fb950; box-shadow: 0 0 8px #3fb950; animation: pulse 1.5s infinite; }
+  .dot.off { background: #6e7681; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+  .controls-row { display: flex; gap: 8px; margin-top: 14px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>STREAK <span class="sub">BTC 5-min Polymarket Strategy</span></h1>
+
+  <div class="status-bar">
+    <span class="dot off" id="dot"></span>
+    <strong id="runStatus">Stopped</strong>
+    <span style="color:#8b949e;">|</span>
+    <span id="statusMsg">Idle</span>
+    <span id="connBadge" style="font-size:11px;"></span>
+    <span id="marketTitle" style="color:#c9d1d9; font-weight:500; font-size:13px;"></span>
+    <span style="margin-left:auto; display:flex; align-items:center; gap:8px;">
+      <span id="modeBadge" class="badge" style="background:#2d2540; color:#bc8cff;">SIM</span>
+      <span id="walletAddr" style="color:#8b949e; font-size:11px;"></span>
+    </span>
+  </div>
+
+  <!-- Private key panel -->
+  <div class="card" style="margin-bottom:14px; border-color:#8b1f1f; background:#1a0f0f;">
+    <h2 style="color:#f85149;">🔑 Private Key (Live mode only)</h2>
+    <div style="font-size:12px; color:#f0a896; margin-bottom:10px; line-height:1.5;">
+      ⚠️ Stored only in memory · never written to disk<br>
+      ⚠️ Never reuse a key that has appeared in any chat or log — generate a fresh key
+    </div>
+    <input id="pkInput" type="password" placeholder="0x... private key"
+           autocomplete="off"
+           style="width:100%; background:#0d1117; color:#e6edf3; border:1px solid #30363d;
+                  border-radius:4px; padding:8px; font-family:monospace; font-size:12px;" />
+    <input id="funderInput" type="text" placeholder="Polymarket Deposit Address (required for Google/Email accounts)"
+           autocomplete="off" style="margin-top:6px;
+                  width:100%; background:#0d1117; color:#e6edf3; border:1px solid #30363d;
+                  border-radius:4px; padding:8px; font-family:monospace; font-size:12px;" />
+    <div style="display:flex; gap:8px; margin-top:8px;">
+      <button class="action" id="btnCheckBalance" style="flex:1;">🔍 Check Balance</button>
+      <button class="action" id="btnLogout" style="flex:0 0 auto;">Clear</button>
+    </div>
+    <div style="margin-top:6px; font-size:11px; color:#8b949e; line-height:1.6;">
+      💡 <strong>MetaMask user</strong>: leave Funder empty (auto-detect EOA)<br>
+      💡 <strong>Google / Email login user</strong>: paste your Polymarket "Deposit" address here<br>
+      &nbsp;&nbsp;&nbsp; → Polymarket → Top right "Cash" button → Deposit → copy the address shown
+    </div>
+    <div style="margin-top:8px; font-size:12px; color:#8b949e;">
+      <span id="walletStatus">No key entered</span>
+    </div>
+  </div>
+
+  <!-- Mode select modal -->
+  <div id="modeModal" style="display:none; position:fixed; inset:0;
+                              background:rgba(0,0,0,0.7); z-index:1000;
+                              align-items:center; justify-content:center;">
+    <div style="background:#161b22; border:1px solid #30363d; border-radius:10px;
+                padding:24px; min-width:380px; max-width:90%;">
+      <h2 style="margin:0 0 8px; font-size:18px;">Select Mode</h2>
+      <p style="color:#8b949e; font-size:13px; margin:0 0 18px; line-height:1.5;">
+        Simulation runs the strategy with virtual funds.<br>
+        Live mode places <strong style="color:#f85149;">real USDC orders</strong> on Polymarket.
+      </p>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <button class="action" id="btnStartSim"
+                style="padding:18px; flex-direction:column; display:flex; gap:6px;
+                       background:#2d2540; border-color:#bc8cff; color:#bc8cff;">
+          <span style="font-size:18px; font-weight:600;">🎮 Simulation</span>
+          <span style="font-size:11px; opacity:.8;">Virtual funds</span>
+        </button>
+        <button class="action" id="btnStartLive"
+                style="padding:18px; flex-direction:column; display:flex; gap:6px;
+                       background:#3d1a1a; border-color:#f85149; color:#f85149;">
+          <span style="font-size:18px; font-weight:600;">💵 Live</span>
+          <span style="font-size:11px; opacity:.8;">Real USDC trades</span>
+        </button>
+      </div>
+      <div style="margin-top:14px; text-align:right;">
+        <button class="action" id="btnModeCancel" style="padding:6px 14px;">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top stats: 6 cards -->
+  <div class="stat-grid">
+    <div class="stat">
+      <div class="label">Balance</div>
+      <div class="value" id="usdcBalance">$ —</div>
+      <div class="sub" id="usdcSub">Allowance —</div>
+    </div>
+    <div class="stat">
+      <div class="label">Realized P&L</div>
+      <div class="value" id="totalPnl">$0.00</div>
+      <div class="sub" id="pnlSub">0 cycles</div>
+    </div>
+    <div class="stat">
+      <div class="label">Win Rate</div>
+      <div class="value" id="winRate">—</div>
+      <div class="sub" id="winSub">— / —</div>
+    </div>
+    <div class="stat">
+      <div class="label">Position</div>
+      <div class="value" id="curPos" style="font-size:14px;">None</div>
+    </div>
+    <div class="stat">
+      <div class="label">BTC</div>
+      <div class="value" id="btcPrice" style="font-size:13px; line-height:1.5;">
+        <div>CL: <span id="btcChainlink">—</span></div>
+        <div>BN: <span id="btcBinance">—</span></div>
+        <div>BB: <span id="btcBybit">—</span></div>
+      </div>
+      <div class="sub" id="btcDelta">Open —</div>
+    </div>
+    <div class="stat">
+      <div class="label">Market Progress</div>
+      <div class="value" id="mktProgress">—</div>
+      <div class="sub" id="mktTimeLeft">—</div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- Left: settings -->
+    <div class="card">
+      <h2>⚙ Core Settings</h2>
+
+      <div class="num-input">
+        <label>Bet Size ($)</label>
+        <div class="stepper">
+          <button data-cfg="bet_size_usd" data-step="-0.5">−</button>
+          <input id="cfg_bet_size_usd" type="number" step="0.5" />
+          <button data-cfg="bet_size_usd" data-step="0.5">+</button>
+        </div>
+        <span class="suffix">$</span>
+      </div>
+
+      <div class="num-input">
+        <label>Entry Mode</label>
+        <select id="cfg_entry_mode"
+                style="flex:1; background:#0d1117; color:#e6edf3; border:1px solid #30363d;
+                       border-radius:4px; padding:6px 8px; font-size:13px;">
+          <option value="low_target">Low Target (buy at exact price ±tol)</option>
+          <option value="high_lead">High Lead (buy leader ≥ entry price)</option>
+        </select>
+      </div>
+
+      <div class="num-input">
+        <label id="lbl_entry_price">Entry Price (¢)</label>
+        <div class="stepper">
+          <button data-cfg="entry_price" data-step="-1">−</button>
+          <input id="cfg_entry_price" type="number" step="1" />
+          <button data-cfg="entry_price" data-step="1">+</button>
+        </div>
+        <span class="suffix">¢</span>
+      </div>
+
+      <div class="num-input" id="row_max_entry">
+        <label>Max Entry (¢)</label>
+        <div class="stepper">
+          <button data-cfg="max_entry_price" data-step="-1">−</button>
+          <input id="cfg_max_entry_price" type="number" step="1" />
+          <button data-cfg="max_entry_price" data-step="1">+</button>
+        </div>
+        <span class="suffix">¢</span>
+      </div>
+
+      <div class="num-input">
+        <label>Take Profit (¢)</label>
+        <div class="stepper">
+          <button data-cfg="tp_price" data-step="-1">−</button>
+          <input id="cfg_tp_price" type="number" step="1" />
+          <button data-cfg="tp_price" data-step="1">+</button>
+        </div>
+        <span class="suffix">¢</span>
+      </div>
+
+      <div class="num-input">
+        <label>Stop Loss (¢)</label>
+        <div class="stepper">
+          <button data-cfg="sl_price" data-step="-1">−</button>
+          <input id="cfg_sl_price" type="number" step="1" />
+          <button data-cfg="sl_price" data-step="1">+</button>
+        </div>
+        <span class="suffix">¢</span>
+      </div>
+
+      <div class="num-input">
+        <label>Buy Type</label>
+        <select id="cfg_buy_order_type"
+                style="flex:1; background:#0d1117; color:#e6edf3; border:1px solid #30363d;
+                       border-radius:4px; padding:6px 8px; font-size:13px;">
+          <option value="limit">Limit</option>
+          <option value="market">Market</option>
+        </select>
+      </div>
+
+      <div class="num-input">
+        <label>Sell Type</label>
+        <select id="cfg_sell_order_type"
+                style="flex:1; background:#0d1117; color:#e6edf3; border:1px solid #30363d;
+                       border-radius:4px; padding:6px 8px; font-size:13px;">
+          <option value="limit">Limit</option>
+          <option value="market">Market</option>
+        </select>
+      </div>
+
+      <div class="num-input">
+        <label>Max Cycles</label>
+        <div class="stepper">
+          <button data-cfg="max_cycles_per_session" data-step="-1">−</button>
+          <input id="cfg_max_cycles_per_session" type="number" step="1" />
+          <button data-cfg="max_cycles_per_session" data-step="1">+</button>
+        </div>
+        <span class="suffix">회</span>
+      </div>
+
+      <details class="advanced">
+        <summary>Advanced</summary>
+        <div class="num-input">
+          <label>Entry Tolerance</label>
+          <div class="stepper">
+            <button data-cfg="entry_tolerance" data-step="-0.5">−</button>
+            <input id="cfg_entry_tolerance" type="number" step="0.5" />
+            <button data-cfg="entry_tolerance" data-step="0.5">+</button>
+          </div>
+          <span class="suffix">¢</span>
+        </div>
+        <div class="num-input">
+          <label>Tradeable Window</label>
+          <div class="stepper">
+            <button data-cfg="tradeable_pct" data-step="-5">−</button>
+            <input id="cfg_tradeable_pct" type="number" step="5" />
+            <button data-cfg="tradeable_pct" data-step="5">+</button>
+          </div>
+          <span class="suffix">%</span>
+        </div>
+        <div class="num-input">
+          <label>Buy When Remaining ≤</label>
+          <div class="stepper">
+            <button data-cfg="buy_when_remaining_below_pct" data-step="-5">−</button>
+            <input id="cfg_buy_when_remaining_below_pct" type="number" step="5" />
+            <button data-cfg="buy_when_remaining_below_pct" data-step="5">+</button>
+          </div>
+          <span class="suffix">%</span>
+        </div>
+        <div style="font-size:11px; color:#8b949e; margin:4px 0 8px 0; line-height:1.5;">
+          ※ Tradeable Window = max % elapsed (early cutoff)<br>
+          ※ Buy When Remaining = only buy when ≤ this % left<br>
+          &nbsp;&nbsp;Set 100% = no remaining-time filter (default)
+        </div>
+        <div class="num-input">
+          <label>Poll Interval</label>
+          <div class="stepper">
+            <button data-cfg="poll_interval_sec" data-step="-0.1">−</button>
+            <input id="cfg_poll_interval_sec" type="number" step="0.1" />
+            <button data-cfg="poll_interval_sec" data-step="0.1">+</button>
+          </div>
+          <span class="suffix">s</span>
+        </div>
+        <div style="font-size:11px; color:#8b949e; margin-top:8px; line-height:1.5;">
+          ※ Polymarket fees are 0% (settlement basis used directly)<br>
+          ※ Setting changes apply on next poll (~0.5s)
+        </div>
+      </details>
+
+      <div class="controls-row">
+        <button class="action" id="btnSaveCfg">💾 Save</button>
+        <button class="action danger" id="btnReset">↺ Reset session</button>
+      </div>
+      <div class="controls-row">
+        <button class="action primary" id="btnStart">▶ Start</button>
+        <button class="action danger" id="btnStop" disabled>■ Stop</button>
+      </div>
+    </div>
+
+    <!-- Right: charts + tables -->
+    <div>
+      <div class="card" style="margin-bottom:14px;">
+        <h2>📊 Polymarket Price (current market)</h2>
+        <div class="chart-box"><canvas id="priceChart"></canvas></div>
+      </div>
+      <div class="card" style="margin-bottom:14px;">
+        <h2>₿ BTC Price (Chainlink = settlement source · Binance · Bybit)</h2>
+        <div class="chart-box"><canvas id="btcChart"></canvas></div>
+      </div>
+      <div class="card" style="margin-bottom:14px;">
+        <h2>💰 Cumulative P&L</h2>
+        <div class="chart-box"><canvas id="pnlChart"></canvas></div>
+      </div>
+      <div class="card" style="margin-bottom:14px;">
+        <h2>🧾 Cycles (current session, last 50)</h2>
+        <div style="max-height:240px;overflow-y:auto;">
+          <table id="cycleTable">
+            <thead><tr>
+              <th>Time</th><th>Market</th><th>Side</th>
+              <th class="num">Entry</th><th class="num">Exit</th>
+              <th>Reason</th><th class="num">P&L</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <h2 style="display:flex; align-items:center; gap:10px;">
+          📂 Trade History (CSV)
+          <select id="historyDate" style="background:#0d1117; color:#e6edf3; border:1px solid #30363d; border-radius:4px; padding:4px 8px; font-size:12px;"></select>
+          <button class="action" id="btnLoadHistory" style="padding:4px 10px; font-size:12px;">Load</button>
+          <span id="historyStat" style="margin-left:auto; font-size:11px; color:#8b949e;"></span>
+        </h2>
+        <div style="max-height:280px; overflow-y:auto;">
+          <table id="historyTable">
+            <thead><tr>
+              <th>Time</th><th>Event</th><th>Market</th><th>Side</th>
+              <th class="num">Shares</th><th class="num">Price</th><th class="num">P&L</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const CFG_KEYS = ['bet_size_usd','entry_mode','entry_price','max_entry_price',
+                  'entry_tolerance','tp_price','sl_price',
+                  'tradeable_pct','buy_when_remaining_below_pct','poll_interval_sec',
+                  'buy_order_type','sell_order_type','max_cycles_per_session'];
+const STRING_KEYS = new Set(['entry_mode','buy_order_type','sell_order_type']);
+const X100_KEYS = new Set(['entry_price','max_entry_price','tp_price','sl_price','entry_tolerance',
+                           'tradeable_pct','buy_when_remaining_below_pct']);
+const toUi = (k, v) => X100_KEYS.has(k) ? Math.round(v * 100 * 1000) / 1000 : v;
+const fromUi = (k, v) => X100_KEYS.has(k) ? v / 100 : v;
+
+let priceChart, btcChart, pnlChart;
+const fmt = (n,d=2) => Number(n).toFixed(d);
+const fmtUsd = (n) => Number(n).toLocaleString('en-US', {maximumFractionDigits:2, minimumFractionDigits:2});
+const pnlClass = v => v >= 0 ? 'pnl-pos' : 'pnl-neg';
+
+const API_BASE = (location.protocol === 'file:' || !location.host)
+  ? 'http://localhost:8765' : '';
+let backendOk = false;
+async function api(path, method='GET', body=null) {
+  const opts = { method, headers: {'Content-Type':'application/json'} };
+  if (body) opts.body = JSON.stringify(body);
+  try {
+    const r = await fetch(API_BASE + path, opts);
+    backendOk = true;
+    return r.json();
+  } catch (e) {
+    backendOk = false;
+    throw e;
+  }
+}
+
+async function loadConfig() {
+  const cfg = await api('/api/config');
+  CFG_KEYS.forEach(k => {
+    const el = document.getElementById('cfg_' + k);
+    if (!el) return;
+    if (STRING_KEYS.has(k)) el.value = cfg[k] || '';
+    else el.value = toUi(k, cfg[k]);
+  });
+  updateEntryModeLabels();
+}
+
+async function saveConfig() {
+  const body = {};
+  CFG_KEYS.forEach(k => {
+    const el = document.getElementById('cfg_' + k);
+    if (!el) return;
+    if (STRING_KEYS.has(k)) body[k] = el.value;
+    else body[k] = fromUi(k, parseFloat(el.value));
+  });
+  await api('/api/config', 'POST', body);
+  flashStatus('Settings saved');
+}
+
+function flashStatus(msg) {
+  const s = document.getElementById('statusMsg');
+  const old = s.textContent;
+  s.textContent = msg;
+  setTimeout(() => { s.textContent = old; }, 1500);
+}
+
+// Entry mode 변경시 라벨 동적 업데이트
+function updateEntryModeLabels() {
+  const mode = document.getElementById('cfg_entry_mode').value;
+  const lbl = document.getElementById('lbl_entry_price');
+  if (lbl) {
+    lbl.textContent = (mode === 'high_lead')
+      ? 'Min Entry (¢)'
+      : 'Entry Price (¢)';
+  }
+}
+document.getElementById('cfg_entry_mode').addEventListener('change', updateEntryModeLabels);
+
+document.querySelectorAll('.stepper button[data-cfg]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const key = btn.dataset.cfg;
+    const step = parseFloat(btn.dataset.step);
+    const el = document.getElementById('cfg_' + key);
+    if (!el) return;
+    const cur = parseFloat(el.value) || 0;
+    const decimals = (step.toString().split('.')[1] || '').length;
+    el.value = (cur + step).toFixed(decimals);
+  });
+});
+
+function initCharts() {
+  const opts = {
+    responsive: true, maintainAspectRatio: false, animation: false,
+    scales: {
+      x: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: '#21262d' } },
+      y: { ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+    },
+    plugins: { legend: { labels: { color: '#e6edf3' } } },
+  };
+
+  priceChart = new Chart(document.getElementById('priceChart'), {
+    type: 'line',
+    data: { labels: [], datasets: [
+      { label: 'Up (ask)', data: [], borderColor: '#3fb950', tension: 0.2, pointRadius: 0, borderWidth: 1.5 },
+      { label: 'Down (ask)', data: [], borderColor: '#f85149', tension: 0.2, pointRadius: 0, borderWidth: 1.5 },
+      { label: 'Entry', data: [], borderColor: '#d29922', borderDash: [4,4], pointRadius: 0, borderWidth: 1 },
+      { label: 'TP', data: [], borderColor: '#2ea043', borderDash: [2,4], pointRadius: 0, borderWidth: 1 },
+      { label: 'SL', data: [], borderColor: '#c93030', borderDash: [2,4], pointRadius: 0, borderWidth: 1 },
+    ] },
+    options: { ...opts, scales: { ...opts.scales, y: { ...opts.scales.y, min: 0, max: 1 } } },
+  });
+
+  btcChart = new Chart(document.getElementById('btcChart'), {
+    type: 'line',
+    data: { labels: [], datasets: [
+      { label: 'Chainlink (settlement) $', data: [],
+        borderColor: '#58a6ff', backgroundColor: 'rgba(88,166,255,0.1)',
+        fill: false, tension: 0.2, pointRadius: 0, borderWidth: 2 },
+      { label: 'Binance $', data: [],
+        borderColor: '#f0b90b', backgroundColor: 'transparent',
+        fill: false, tension: 0.2, pointRadius: 0, borderWidth: 1.5, borderDash: [4,3] },
+      { label: 'Bybit $', data: [],
+        borderColor: '#ff9e2c', backgroundColor: 'transparent',
+        fill: false, tension: 0.2, pointRadius: 0, borderWidth: 1.5, borderDash: [2,3] },
+      { label: 'Market Open $', data: [],
+        borderColor: '#8b949e', backgroundColor: 'transparent',
+        fill: false, pointRadius: 0, borderWidth: 1, borderDash: [6,6] },
+    ] },
+    options: opts,
+  });
+
+  pnlChart = new Chart(document.getElementById('pnlChart'), {
+    type: 'line',
+    data: { labels: [], datasets: [{
+      label: 'Cumulative P&L ($)', data: [],
+      borderColor: '#58a6ff', backgroundColor: 'rgba(88,166,255,0.1)',
+      fill: true, tension: 0.2, pointRadius: 2, borderWidth: 2,
+    }] },
+    options: opts,
+  });
+}
+
+function updateCharts(s) {
+  const prices = s.recent_prices || [];
+  if (prices.length > 0) {
+    const labels = prices.map(p => `${(p.progress*100).toFixed(0)}%`);
+    priceChart.data.labels = labels;
+    priceChart.data.datasets[0].data = prices.map(p => p.up_ask);
+    priceChart.data.datasets[1].data = prices.map(p => p.down_ask);
+    priceChart.data.datasets[2].data = prices.map(() => s.config.entry_price);
+    priceChart.data.datasets[3].data = prices.map(() => s.config.tp_price);
+    priceChart.data.datasets[4].data = prices.map(() => s.config.sl_price);
+    priceChart.update('none');
+
+    btcChart.data.labels = labels;
+    btcChart.data.datasets[0].data = prices.map(p => p.btc_chainlink || null);
+    btcChart.data.datasets[1].data = prices.map(p => p.btc_binance || p.btc_price || null);
+    btcChart.data.datasets[2].data = prices.map(p => p.btc_bybit || null);
+    // Open price reference line — use Chainlink open if available, else Binance open
+    const openP = prices[0] ? (prices[0].btc_chainlink_at_start || prices[0].btc_open || null) : null;
+    btcChart.data.datasets[3].data = prices.map(() => openP);
+    btcChart.update('none');
+  }
+  const cycles = s.cycles || [];
+  let cum = 0;
+  const labels = [], data = [];
+  cycles.forEach((c, i) => { cum += c.pnl; labels.push(`#${i+1}`); data.push(cum); });
+  pnlChart.data.labels = labels;
+  pnlChart.data.datasets[0].data = data;
+  pnlChart.update('none');
+}
+
+function updateTable(cycles) {
+  const tbody = document.querySelector('#cycleTable tbody');
+  tbody.innerHTML = '';
+  [...cycles].reverse().forEach(c => {
+    const tr = document.createElement('tr');
+    const t = new Date(c.exit_time * 1000);
+    const tStr = t.toLocaleTimeString('en-US', {hour12: false});
+    const slugShort = c.slug ? c.slug.replace('btc-updown-5m-', '').slice(-6) : '';
+    const sideClass = c.side === 'up' ? 'up' : 'down';
+    const reasonClass = (c.exit_reason || '').toLowerCase();
+    tr.innerHTML = `
+      <td>${tStr}</td>
+      <td>${slugShort}</td>
+      <td><span class="badge ${sideClass}">${(c.side||'').toUpperCase()}</span></td>
+      <td class="num">${fmt(c.entry_price, 3)}</td>
+      <td class="num">${fmt(c.exit_price, 3)}</td>
+      <td><span class="badge ${reasonClass}">${c.exit_reason}</span></td>
+      <td class="num ${pnlClass(c.pnl)}">${c.pnl >= 0 ? '+' : ''}${fmt(c.pnl, 2)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+async function tick() {
+  let s;
+  try { s = await api('/api/status'); }
+  catch (e) {
+    document.getElementById('connBadge').innerHTML =
+      '<span style="color:#f85149;">⚠ Backend disconnected — open via http://localhost:8765</span>';
+    return;
+  }
+  document.getElementById('connBadge').innerHTML =
+    '<span style="color:#3fb950;">● connected</span>';
+  try {
+    const dot = document.getElementById('dot');
+    const runStatus = document.getElementById('runStatus');
+    if (s.running) { dot.className = 'dot on'; runStatus.textContent = 'Running'; }
+    else { dot.className = 'dot off'; runStatus.textContent = 'Stopped'; }
+    document.getElementById('statusMsg').textContent = s.status_msg || '';
+    const q = (s.market_info && s.market_info.question) || '';
+    const m = q.match(/-\s*(.+)$/);
+    document.getElementById('marketTitle').textContent = m ? m[1].trim() : (s.current_slug || '');
+    document.getElementById('btnStart').disabled = s.running;
+    document.getElementById('btnStop').disabled = !s.running;
+
+    const modeBadge = document.getElementById('modeBadge');
+    if (s.live_mode) {
+      modeBadge.textContent = 'LIVE';
+      modeBadge.style.background = '#3d1a1a';
+      modeBadge.style.color = '#f85149';
+    } else {
+      modeBadge.textContent = 'SIM';
+      modeBadge.style.background = '#2d2540';
+      modeBadge.style.color = '#bc8cff';
+    }
+    document.getElementById('walletAddr').textContent =
+      s.wallet_address ? `${s.wallet_address.slice(0,6)}...${s.wallet_address.slice(-4)}` : '';
+
+    // Wallet status panel
+    const wsEl = document.getElementById('walletStatus');
+    const pkVal = document.getElementById('pkInput').value.trim();
+    if (s.authenticated) {
+      const bal = s.wallet_balance || 0;
+      const allow = s.wallet_allowance || 0;
+      const balLow = bal < 1;
+      const allowLow = allow < 1;
+      const sigLabel = s.detect_label || (s.signature_type === 2 ? 'Gnosis Safe' : 'EOA');
+      wsEl.innerHTML =
+        `Detected: <strong style="color:#3fb950;">${sigLabel}</strong>` +
+        `<br>EOA: <span style="font-family:monospace;font-size:11px;">${s.wallet_address}</span>` +
+        (s.funder ? `<br>Funder: <span style="font-family:monospace;font-size:11px;">${s.funder}</span>` : '') +
+        `<br><span style="color:${balLow?'#f85149':'#3fb950'}">Balance: $${bal.toFixed(2)}</span> · ` +
+        `<span style="color:${allowLow?'#f85149':'#3fb950'}">Allowance: $${allow.toFixed(2)}</span>` +
+        (balLow ? '<br><span style="color:#f85149;">⚠ Low balance — if auto-detect failed, set funder manually</span>' : '') +
+        (allowLow && !balLow ? '<br><span style="color:#d29922;">⚠ Allowance is 0 — make one manual trade on Polymarket to activate</span>' : '');
+      wsEl.style.color = '#c9d1d9';
+    } else if (!pkVal) {
+      wsEl.textContent = 'No key entered (simulation only)';
+      wsEl.style.color = '#8b949e';
+    }
+
+    // Top USDC card
+    if (s.authenticated) {
+      const bal = s.wallet_balance || 0;
+      const allow = s.wallet_allowance || 0;
+      const usdcEl = document.getElementById('usdcBalance');
+      usdcEl.textContent = `$${fmtUsd(bal)}`;
+      usdcEl.className = 'value ' + (bal < 1 ? 'pnl-neg' : 'pnl-pos');
+      document.getElementById('usdcSub').textContent =
+        `Allowance $${fmtUsd(allow)}` + (s.detect_label ? ` · ${s.detect_label}` : '');
+    } else {
+      document.getElementById('usdcBalance').textContent = '$ —';
+      document.getElementById('usdcBalance').className = 'value';
+      document.getElementById('usdcSub').textContent = 'Enter private key';
+    }
+
+    // Realized P&L
+    const pnlEl = document.getElementById('totalPnl');
+    pnlEl.textContent = `${s.realized_pnl >= 0 ? '+' : ''}$${fmt(Math.abs(s.realized_pnl), 2)}`;
+    pnlEl.className = 'value ' + pnlClass(s.realized_pnl);
+    document.getElementById('pnlSub').textContent = `${(s.cycles || []).length} cycles`;
+
+    const wins = (s.cycles || []).filter(c => c.pnl > 0).length;
+    const total = (s.cycles || []).length;
+    document.getElementById('winRate').textContent = total > 0 ? `${(wins/total*100).toFixed(0)}%` : '—';
+    document.getElementById('winSub').textContent = `${wins} / ${total}`;
+
+    // Position
+    if (s.position) {
+      const sellAt = s.position.sell_limit_price || 0;
+      const placedAgo = s.position.sell_placed_at ? (s.now_ts - s.position.sell_placed_at) : 0;
+      document.getElementById('curPos').innerHTML =
+        `<span class="badge ${s.position.side}">${s.position.side.toUpperCase()}</span> ` +
+        `${fmt(s.position.shares, 1)}sh @ ${fmt(s.position.entry_price, 3)}` +
+        `<div class="sub">→ Sell ${fmt(sellAt,3)} (${placedAgo.toFixed(1)}s)</div>`;
+    } else if (s.pending_buy) {
+      const pb = s.pending_buy;
+      document.getElementById('curPos').innerHTML =
+        `<span class="badge ${pb.side}">${pb.side.toUpperCase()}</span> Limit BUY pending` +
+        `<div class="sub">@ ${fmt(pb.limit_price,3)} × ${fmt(pb.shares,1)}sh</div>`;
+    } else {
+      document.getElementById('curPos').innerHTML = 'None<div class="sub">&nbsp;</div>';
+    }
+
+    // BTC
+    const lastPrice = (s.recent_prices && s.recent_prices.length > 0)
+      ? s.recent_prices[s.recent_prices.length-1] : null;
+    if (lastPrice) {
+      const cl = lastPrice.btc_chainlink || 0;
+      const bn = lastPrice.btc_binance || lastPrice.btc_price || 0;
+      const bb = lastPrice.btc_bybit || 0;
+      const clDelta = lastPrice.btc_chainlink_delta || 0;
+      const bnDelta = lastPrice.btc_delta || 0;
+      const bbDelta = lastPrice.btc_bybit_delta || 0;
+      const clOpen = lastPrice.btc_chainlink_at_start || 0;
+      const bnOpen = lastPrice.btc_open || 0;
+      document.getElementById('btcChainlink').innerHTML =
+        cl > 0 ? `$${fmtUsd(cl)} <span class="${clDelta>=0?'delta-pos':'delta-neg'}" style="font-size:11px;">${clDelta>=0?'+':''}${fmt(clDelta,1)}</span>` : '—';
+      document.getElementById('btcBinance').innerHTML =
+        bn > 0 ? `$${fmtUsd(bn)} <span class="${bnDelta>=0?'delta-pos':'delta-neg'}" style="font-size:11px;">${bnDelta>=0?'+':''}${fmt(bnDelta,1)}</span>` : '—';
+      document.getElementById('btcBybit').innerHTML =
+        bb > 0 ? `$${fmtUsd(bb)} <span class="${bbDelta>=0?'delta-pos':'delta-neg'}" style="font-size:11px;">${bbDelta>=0?'+':''}${fmt(bbDelta,1)}</span>` : '—';
+      const sub = document.getElementById('btcDelta');
+      if (clOpen > 0 && bnOpen > 0) {
+        sub.innerHTML = `Open CL $${fmtUsd(clOpen)} / BN $${fmtUsd(bnOpen)}`;
+      } else {
+        sub.textContent = 'Open —';
+      }
+    }
+
+    // Market progress
+    if (s.market_info) {
+      const dur = s.market_info.end_ts - s.market_info.start_ts;
+      const elapsed = Math.max(0, s.now_ts - s.market_info.start_ts);
+      const left = Math.max(0, s.market_info.end_ts - s.now_ts);
+      const pct = Math.min(100, elapsed / dur * 100);
+      document.getElementById('mktProgress').textContent = `${pct.toFixed(0)}%`;
+      const mins = Math.floor(left / 60), secs = Math.floor(left % 60);
+      document.getElementById('mktTimeLeft').textContent = `${mins}:${secs.toString().padStart(2,'0')} left`;
+    } else {
+      document.getElementById('mktProgress').textContent = '—';
+      document.getElementById('mktTimeLeft').textContent = '—';
+    }
+
+    updateCharts(s);
+    updateTable(s.cycles || []);
+  } catch (e) { console.error(e); }
+}
+
+function openModeModal() { document.getElementById('modeModal').style.display = 'flex'; }
+function closeModeModal() { document.getElementById('modeModal').style.display = 'none'; }
+
+document.getElementById('btnStart').onclick = openModeModal;
+document.getElementById('btnModeCancel').onclick = closeModeModal;
+
+document.getElementById('btnStartSim').onclick = async () => {
+  closeModeModal();
+  await api('/api/start', 'POST', { live: false });
+  tick();
+};
+
+document.getElementById('btnStartLive').onclick = async () => {
+  const pk = document.getElementById('pkInput').value.trim();
+  const funder = document.getElementById('funderInput').value.trim();
+  const s = await api('/api/status').catch(() => null);
+  if (!pk && !(s && s.authenticated)) {
+    alert('Live mode requires a private key.\nEnter your 0x... key in the panel above.');
+    return;
+  }
+  if (!confirm('⚠️ Live mode places real USDC orders for the configured bet size.\nContinue?')) return;
+  closeModeModal();
+  const body = { live: true };
+  if (pk) body.private_key = pk;
+  if (funder) body.funder = funder;
+  const r = await api('/api/start', 'POST', body);
+  if (!r.ok) {
+    alert(r.error || 'failed');
+  } else if (r.wallet_address) {
+    document.getElementById('pkInput').value = '';
+  }
+  tick();
+};
+
+document.getElementById('btnStop').onclick = async () => { await api('/api/stop','POST'); tick(); };
+document.getElementById('btnSaveCfg').onclick = saveConfig;
+document.getElementById('btnReset').onclick = async () => {
+  if (confirm('Reset session data? (CSV files are preserved)')) {
+    await api('/api/reset','POST'); tick();
+  }
+};
+
+document.getElementById('btnCheckBalance').onclick = async () => {
+  const pk = document.getElementById('pkInput').value.trim();
+  const funder = document.getElementById('funderInput').value.trim();
+  if (!pk) { alert('Please enter a private key first'); return; }
+  const btn = document.getElementById('btnCheckBalance');
+  const origText = btn.textContent;
+  btn.textContent = '⏳ Checking...';
+  btn.disabled = true;
+  try {
+    const body = { private_key: pk };
+    if (funder) body.funder = funder;
+    const r = await api('/api/auth', 'POST', body);
+    if (!r.ok) {
+      alert('Auth failed: ' + (r.error || 'unknown'));
+    }
+  } catch (e) {
+    alert('Request failed: ' + e.message);
+  } finally {
+    btn.textContent = origText;
+    btn.disabled = false;
+    tick();
+  }
+};
+
+document.getElementById('btnLogout').onclick = async () => {
+  await api('/api/auth', 'POST', { private_key: '' });
+  document.getElementById('pkInput').value = '';
+  document.getElementById('funderInput').value = '';
+  tick();
+};
+
+document.getElementById('pkInput').addEventListener('input', () => {
+  const pk = document.getElementById('pkInput').value.trim();
+  const ws = document.getElementById('walletStatus');
+  if (!pk) { ws.textContent = 'No key entered'; ws.style.color = '#8b949e'; return; }
+  if (pk.length < 60) { ws.textContent = 'Key too short (expect 64+ chars)'; ws.style.color = '#d29922'; return; }
+  ws.textContent = 'Key entered (will be used on Live start)'; ws.style.color = '#3fb950';
+});
+
+// ── Browser localStorage persistent history ─────────────────────────
+// All cycle data is saved per-day in localStorage. Server is stateless.
+const LS_PREFIX = 'streak_cycles_';   // key = streak_cycles_YYYY-MM-DD
+
+function lsTodayKey() {
+  const d = new Date();
+  return LS_PREFIX + d.toISOString().slice(0, 10);
+}
+
+function lsSaveCycles(cycles) {
+  // 새로 들어온 cycles만 LS에 누적 (cycle_id로 dedup)
+  const key = lsTodayKey();
+  const existing = JSON.parse(localStorage.getItem(key) || '[]');
+  const seen = new Set(existing.map(c => c.cycle_id));
+  let added = 0;
+  cycles.forEach(c => {
+    if (c.cycle_id && !seen.has(c.cycle_id)) {
+      existing.push(c);
+      seen.add(c.cycle_id);
+      added++;
+    }
+  });
+  if (added > 0) {
+    localStorage.setItem(key, JSON.stringify(existing));
+  }
+}
+
+function lsAvailableDates() {
+  const dates = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith(LS_PREFIX)) {
+      dates.push(k.slice(LS_PREFIX.length));
+    }
+  }
+  return dates.sort().reverse();
+}
+
+function lsLoadCycles(date) {
+  return JSON.parse(localStorage.getItem(LS_PREFIX + date) || '[]');
+}
+
+async function loadHistoryDates() {
+  const dates = lsAvailableDates();
+  const sel = document.getElementById('historyDate');
+  sel.innerHTML = '';
+  dates.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d; opt.textContent = d;
+    sel.appendChild(opt);
+  });
+  if (dates.length === 0) {
+    const opt = document.createElement('option');
+    opt.textContent = '(no data yet)';
+    sel.appendChild(opt);
+  }
+}
+
+async function loadHistory() {
+  const date = document.getElementById('historyDate').value;
+  if (!date || date.startsWith('(')) return;
+  const cycles = lsLoadCycles(date);
+  const tbody = document.querySelector('#historyTable tbody');
+  tbody.innerHTML = '';
+  let totalPnl = 0;
+  cycles.slice().reverse().forEach(c => {
+    const ts = new Date(c.exit_time * 1000).toLocaleString('en-US', {hour12: false});
+    const slugShort = (c.slug || '').replace('btc-updown-5m-','').slice(-6);
+    const pnl = parseFloat(c.pnl) || 0;
+    totalPnl += pnl;
+    const sideClass = c.side === 'up' ? 'up' : 'down';
+    const reasonClass = (c.exit_reason || '').toLowerCase();
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-size:11px;">${ts}</td>
+      <td><span class="badge ${reasonClass}">${c.exit_reason || ''}</span></td>
+      <td>${slugShort}</td>
+      <td><span class="badge ${sideClass}">${(c.side||'').toUpperCase()}</span></td>
+      <td class="num">${Number(c.shares).toFixed(1)}</td>
+      <td class="num">${Number(c.entry_price).toFixed(3)} → ${Number(c.exit_price).toFixed(3)}</td>
+      <td class="num ${pnl >= 0 ? 'pnl-pos' : 'pnl-neg'}">${pnl>=0?'+':''}${pnl.toFixed(2)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('historyStat').innerHTML =
+    `${cycles.length} cycles · cum <span class="${totalPnl>=0?'pnl-pos':'pnl-neg'}">$${totalPnl>=0?'+':''}${totalPnl.toFixed(2)}</span>`;
+}
+
+document.getElementById('btnLoadHistory').onclick = loadHistory;
+
+// 사이클 자동 저장 — 매 tick에서 status.cycles 받아 LS에 dedup 저장
+const _origTick = tick;
+tick = async function() {
+  await _origTick();
+  try {
+    const s = await api('/api/status');
+    if (s && s.cycles && s.cycles.length > 0) {
+      lsSaveCycles(s.cycles);
+    }
+  } catch (e) {}
+};
+
+(async () => {
+  await loadConfig();
+  initCharts();
+  await loadHistoryDates();
+  tick();
+  setInterval(tick, 1000);  // 1초 주기 (LS write 부담 줄임)
+  setInterval(loadHistoryDates, 30000);  // 30초마다 날짜 목록 갱신
+})();
+</script>
+</body>
+</html>

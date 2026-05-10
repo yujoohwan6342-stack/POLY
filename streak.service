@@ -1,0 +1,16 @@
+[Unit]
+Description=STREAK - Polymarket BTC 5-min Strategy Bot
+After=network.target
+
+[Service]
+Type=simple
+User=streak
+WorkingDirectory=/opt/streak
+ExecStart=/usr/bin/python3 /opt/streak/streak.py --no-browser
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/var/log/streak.log
+StandardError=append:/var/log/streak.log
+
+[Install]
+WantedBy=multi-user.target

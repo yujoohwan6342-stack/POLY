@@ -1,0 +1,4 @@
+aiohttp>=3.9
+certifi>=2024.0
+py-clob-client-v2>=1.0.1
+eth-account>=0.13
