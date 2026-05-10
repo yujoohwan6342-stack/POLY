@@ -121,6 +121,34 @@
     "no_trades_local": "No trades yet",
     "tab_warning": "⚠ Bot runs only while this tab is open"
   },
+  "safety": {
+    "badge": "Non-custodial",
+    "title": "Your keys, your funds",
+    "subtitle": "STREAK never stores your private key or holds your USDC.",
+    "p1_title": "Private key stays in your browser",
+    "p1_desc": "We use stateless execution. Your key is sent over HTTPS to sign one trade, then released from server memory. Never written to disk, database, or logs.",
+    "p2_title": "Funds stay on Polymarket",
+    "p2_desc": "Your USDC is on Polygon, in your own wallet. STREAK only places orders — never holds, transfers, or withdraws your money.",
+    "p3_title": "Open source & auditable",
+    "p3_desc": "All execution code is public on GitHub. Anyone can verify the no-storage guarantee.",
+    "p4_title": "Your trade history is private",
+    "p4_desc": "Trades are stored only in your browser localStorage. Nothing on our server.",
+    "view_source": "View source on GitHub"
+  },
+  "disclaimer": {
+    "title": "Risk Disclaimer",
+    "short": "Trading prediction markets involves risk. Past results do not guarantee future returns.",
+    "full_title": "Important — please read",
+    "p1": "STREAK is a software tool, not an investment advisor or broker. We do not give financial advice.",
+    "p2": "Polymarket is a regulated/restricted product in many jurisdictions including the United States. You are responsible for confirming that using it is legal where you live.",
+    "p3": "Automated trading can lose money quickly. You may lose all USDC in your trading wallet. Only trade with funds you can afford to lose.",
+    "p4": "Backtest results, win rates, and example returns are historical. They are NOT a promise of future performance.",
+    "p5": "STREAK is provided AS IS, with no warranty. We are not liable for any trading losses, slippage, missed exits, downtime, blockchain failures, Polymarket outages, or wallet-key compromise on your device.",
+    "p6": "By using STREAK you accept full responsibility for every order placed. The strategy parameters and the decision to start the bot are yours alone.",
+    "agree": "I understand and accept the risks",
+    "disagreed_msg": "Please accept the risk disclaimer to start the bot",
+    "footer_short": "STREAK is non-custodial software. Trading involves risk of loss. Not financial advice."
+  },
   "auth": {
     "connect": "Connect Wallet",
     "connecting": "Connecting…",

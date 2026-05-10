@@ -299,6 +299,53 @@ async function pageReferrals() {
     : `<div class="empty">${t('referrals.no_referrals')}</div>`;
 }
 
+// ─── Disclaimer / Safety ─────────────────────────────────────────
+function disclaimerAccepted() { return localStorage.getItem('streak_disclaimer_v1') === 'yes'; }
+function setDisclaimerAccepted(v) { localStorage.setItem('streak_disclaimer_v1', v ? 'yes' : ''); }
+
+function openDisclaimerModal(onAccept) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1100;
+    display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(6px);overflow:auto;`;
+  overlay.innerHTML = `
+    <div style="background:var(--bg);border-radius:20px;padding:24px;max-width:520px;width:100%;
+                box-shadow:var(--shadow-lg);max-height:92vh;overflow:auto;">
+      <div style="font-size:32px;text-align:center;">⚠️</div>
+      <h2 style="margin:8px 0 4px;text-align:center;">${t('disclaimer.full_title')}</h2>
+      <p style="text-align:center;color:var(--text-3);font-size:13px;margin:0 0 16px;">${t('disclaimer.short')}</p>
+      <ol style="margin:0 0 16px;padding-left:20px;font-size:13px;line-height:1.65;color:var(--text-2);">
+        <li style="margin-bottom:8px;">${t('disclaimer.p1')}</li>
+        <li style="margin-bottom:8px;">${t('disclaimer.p2')}</li>
+        <li style="margin-bottom:8px;">${t('disclaimer.p3')}</li>
+        <li style="margin-bottom:8px;">${t('disclaimer.p4')}</li>
+        <li style="margin-bottom:8px;">${t('disclaimer.p5')}</li>
+        <li style="margin-bottom:8px;">${t('disclaimer.p6')}</li>
+      </ol>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;
+                    background:var(--bg-2);padding:12px;border-radius:10px;margin-bottom:12px;">
+        <input type="checkbox" id="dc-chk" />
+        <span style="font-size:13px;">${t('disclaimer.agree')}</span>
+      </label>
+      <div class="row" style="gap:8px;">
+        <button class="btn" id="dc-ok" disabled style="flex:1;opacity:.5;">${t('common.save') || 'OK'}</button>
+        <button class="btn ghost" id="dc-cancel">${t('common.cancel')}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.onclick = (e)=>{ if (e.target===overlay) close(); };
+  const chk = overlay.querySelector('#dc-chk');
+  const ok = overlay.querySelector('#dc-ok');
+  chk.onchange = () => { ok.disabled = !chk.checked; ok.style.opacity = chk.checked ? 1 : .5; };
+  ok.onclick = () => {
+    if (!chk.checked) return;
+    setDisclaimerAccepted(true);
+    close();
+    if (typeof onAccept === 'function') onAccept();
+  };
+  overlay.querySelector('#dc-cancel').onclick = close;
+}
+
 // ─── LIVE strategy engine (browser-side) ─────────────────────────
 // PK 는 sessionStorage 또는 localStorage. 서버 전송은 매 거래 시점에만.
 const LIVE = {
@@ -644,6 +691,12 @@ async function pageTrading() {
       <p style="margin:12px 0 0; font-size:12px; color:var(--text-2);">${t('trading.auto_desc')}</p>
     </section>
 
+    <section class="safety-strip" style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+      <div class="chip green">🔒 ${t('safety.badge')}</div>
+      <div class="chip">⚠ ${t('disclaimer.short')}</div>
+      <button class="chip link" id="btn-show-disclaimer">${t('disclaimer.title')} →</button>
+    </section>
+
     <section class="card" style="margin-top:12px;">
       <div class="row between">
         <div>
@@ -814,6 +867,10 @@ async function pageTrading() {
   const stopBtn = document.getElementById('btn-trade-stop');
   if (startBtn) startBtn.onclick = async () => {
     if (isLive) {
+      if (!disclaimerAccepted()) {
+        openDisclaimerModal(() => startBtn.click());
+        return;
+      }
       if (!havePk) { openPkModal(); return; }
       liveStart(cfg);
       showToast('✓ ' + t('trading.live_loop_running'));
@@ -832,6 +889,9 @@ async function pageTrading() {
   if (stopBtn && isLive) stopBtn.onclick = () => {
     liveStop(); showToast(t('trading.live_loop_stopped')); pageTrading();
   };
+
+  const showDisc = document.getElementById('btn-show-disclaimer');
+  if (showDisc) showDisc.onclick = () => openDisclaimerModal();
 
   // 모드 토글
   main.querySelectorAll('[data-mode]').forEach(b => {
@@ -1119,11 +1179,33 @@ function pageSettings() {
       </div>
     </section>
     <section class="card">
+      <h3 style="margin:0 0 8px;">🔒 ${t('safety.badge')}</h3>
+      <p style="font-size:13px; color:var(--text-2); margin:0 0 8px;">${t('safety.subtitle')}</p>
+      <ul style="margin:0 0 12px; padding-left:18px; font-size:12px; color:var(--text-2); line-height:1.6;">
+        <li>${t('safety.p1_title')}</li>
+        <li>${t('safety.p2_title')}</li>
+        <li>${t('safety.p4_title')}</li>
+      </ul>
+      <a href="https://github.com/yujoohwan6342-stack/POLY" target="_blank" rel="noopener" style="font-size:13px;">${t('safety.view_source')} →</a>
+    </section>
+    <section class="card">
+      <h3 style="margin:0 0 6px;">⚠ ${t('disclaimer.title')}</h3>
+      <p style="font-size:13px; color:var(--text-2); margin:0 0 10px;">${t('disclaimer.short')}</p>
+      <button class="btn ghost sm" id="btn-set-disc">${t('disclaimer.full_title')} →</button>
+    </section>
+
+    <section class="card">
       <h3 style="color:var(--neg);">${t('settings.danger_zone')}</h3>
       <button class="btn danger" id="btn-logout">${t('settings.disconnect')}</button>
     </section>
+
+    <footer class="site-footer" style="margin:24px 0 8px; text-align:center; font-size:11px; color:var(--text-3); line-height:1.6;">
+      ${t('disclaimer.footer_short')}
+    </footer>
   `;
   if (isAnon) document.getElementById('btn-upgrade-set').onclick = signInGoogle;
+  const setDisc = document.getElementById('btn-set-disc');
+  if (setDisc) setDisc.onclick = () => openDisclaimerModal();
   main.querySelectorAll('[data-lang]').forEach(b => {
     b.onclick = async () => { await loadI18n(b.dataset.lang); pageSettings(); };
   });
@@ -1206,8 +1288,36 @@ function renderLanding() {
         <div class="card"><h3>🎁 ${t('landing.feature_3_title')}</h3><p style="margin:4px 0 0;font-size:13px;">${t('landing.feature_3_desc')}</p></div>
       </div>
     </section>
+
+    <section class="safety-block" style="margin-top:32px;">
+      <div class="row" style="gap:6px;align-items:center;margin-bottom:6px;">
+        <span class="chip green">🔒 ${t('safety.badge')}</span>
+      </div>
+      <h2 style="font-size:22px; line-height:1.3; letter-spacing:-0.02em; margin:4px 0;">${t('safety.title')}</h2>
+      <p style="font-size:14px; color:var(--text-2); margin:0 0 16px;">${t('safety.subtitle')}</p>
+      <div class="grid-2" style="grid-template-columns:1fr; gap:12px;">
+        <div class="card"><h3>🔑 ${t('safety.p1_title')}</h3><p style="margin:4px 0 0;font-size:13px; color:var(--text-2);">${t('safety.p1_desc')}</p></div>
+        <div class="card"><h3>💰 ${t('safety.p2_title')}</h3><p style="margin:4px 0 0;font-size:13px; color:var(--text-2);">${t('safety.p2_desc')}</p></div>
+        <div class="card"><h3>📖 ${t('safety.p3_title')}</h3><p style="margin:4px 0 0;font-size:13px; color:var(--text-2);">${t('safety.p3_desc')}</p>
+          <a href="https://github.com/yujoohwan6342-stack/POLY" target="_blank" rel="noopener" style="font-size:12px; display:inline-block; margin-top:6px;">${t('safety.view_source')} →</a>
+        </div>
+        <div class="card"><h3>🗂 ${t('safety.p4_title')}</h3><p style="margin:4px 0 0;font-size:13px; color:var(--text-2);">${t('safety.p4_desc')}</p></div>
+      </div>
+    </section>
+
+    <section class="risk-block" style="margin-top:24px; padding:16px; border:1px solid rgba(239,68,68,.3); border-radius:12px; background:rgba(239,68,68,.05);">
+      <div style="font-weight:700; color:#ef4444; margin-bottom:6px;">⚠ ${t('disclaimer.title')}</div>
+      <p style="font-size:13px; color:var(--text-2); margin:0 0 8px; line-height:1.6;">${t('disclaimer.short')}</p>
+      <button class="btn ghost sm" id="btn-landing-disc">${t('disclaimer.full_title')} →</button>
+    </section>
+
+    <footer class="site-footer" style="margin:32px 0 16px; text-align:center; font-size:11px; color:var(--text-3); line-height:1.6;">
+      <div>${t('disclaimer.footer_short')}</div>
+      <div style="margin-top:4px;">© STREAK · <a href="https://github.com/yujoohwan6342-stack/POLY" target="_blank" rel="noopener" style="color:var(--text-3);">GitHub</a></div>
+    </footer>
   `;
   document.getElementById('btn-start').onclick = openSignInModal;
+  document.getElementById('btn-landing-disc').onclick = () => openDisclaimerModal();
   startCounter();
 }
 
