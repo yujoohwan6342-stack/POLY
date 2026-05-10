@@ -303,19 +303,21 @@ async function pageTrading() {
   const main = document.getElementById('main');
   main.innerHTML = `<div class="card"><div class="empty">${t('common.loading')}</div></div>`;
 
-  let cfg, stats, openPos, history;
+  let cfg, stats, openPos, history, assets;
   try {
-    [cfg, stats, openPos, history] = await Promise.all([
+    [cfg, stats, openPos, history, assets] = await Promise.all([
       api('/api/trading/config'),
       api('/api/trading/stats'),
       api('/api/trading/positions'),
       api('/api/trading/history?limit=20'),
+      api('/api/trading/assets'),
     ]);
   } catch (e) { console.error(e); showToast(t('common.error')); return; }
 
-  const selectedStrategy = cfg.strategy || localStorage.getItem('streak_preset') || 'lead';
+  const selectedStrategy = cfg.entry_mode || cfg.strategy || 'low_target';
   const ms = stats.market_state || {};
-  const closeTs = ms.current_close ? new Date(ms.current_close) : null;
+  const closeTs = ms.end_ts ? new Date(ms.end_ts * 1000) : null;
+  const elapsedPct = (ms.elapsed_pct || 0) * 100;
   const sideBadge = (s) => s === 'YES'
     ? `<span style="background:rgba(34,197,94,.15); color:#22c55e; padding:2px 8px; border-radius:8px; font-size:11px; font-weight:600;">YES</span>`
     : `<span style="background:rgba(239,68,68,.15); color:#ef4444; padding:2px 8px; border-radius:8px; font-size:11px; font-weight:600;">NO</span>`;
@@ -338,11 +340,18 @@ async function pageTrading() {
               ? `<span style="color:#22c55e;">● ${t('trading.running')}</span>`
               : `<span style="color:var(--text-3);">● ${t('trading.stopped')}</span>`}
           </div>
-          ${ms.current_market_id ? `
+          ${ms.slug ? `
             <div class="sub" style="margin-top:8px; font-size:12px;">
-              ${t('trading.current_market')}: <strong>BTC ≥ $${(ms.current_strike || 0).toLocaleString()}</strong>
+              ${t('trading.current_market')}: <strong>${ms.question || ms.slug}</strong>
               ${closeTs ? ` · <span id="td-cd">${t('trading.next_cycle')}: <span id="td-cd-num">…</span></span>` : ''}
-            </div>` : ''}
+            </div>
+            <div style="margin-top:8px; height:6px; background:var(--bg-2); border-radius:3px; overflow:hidden;">
+              <div style="height:100%; width:${elapsedPct.toFixed(0)}%; background:var(--primary); transition:width 1s;"></div>
+            </div>
+            <div class="sub" style="margin-top:4px; font-size:11px; color:var(--text-3);">
+              ${elapsedPct.toFixed(0)}% ${t('trading.elapsed')} · ${(100-elapsedPct).toFixed(0)}% ${t('trading.remaining')}
+            </div>
+            ` : ''}
         </div>
         <div>
           ${cfg.active
@@ -351,6 +360,23 @@ async function pageTrading() {
         </div>
       </div>
       <p style="margin:12px 0 0; font-size:12px; color:var(--text-2);">${t('trading.auto_desc')}</p>
+    </section>
+
+    <section class="card" style="margin-top:12px;">
+      <div class="label">${t('trading.asset_selector')}</div>
+      <div class="row" style="gap:8px; margin-top:8px; flex-wrap:wrap;">
+        ${assets.map(a => {
+          const allDurs = [...a.active_durations, ...a.coming_soon_durations].sort((x,y)=>x-y);
+          return allDurs.map(d => {
+            const enabled = a.active_durations.includes(d);
+            const sel = (cfg.asset === a.code && cfg.duration_min === d);
+            return `<button class="btn sm ${sel?'':'ghost'}" data-asset="${a.code}" data-dur="${d}"
+                            ${enabled?'':'disabled style="opacity:.4; cursor:not-allowed;"'}>
+              ${a.icon} ${a.code} ${d}m${enabled?'':' · '+t('trading.coming_soon')}
+            </button>`;
+          }).join('');
+        }).join('')}
+      </div>
     </section>
 
     <section class="grid-2" style="margin-top:12px;">
@@ -369,20 +395,48 @@ async function pageTrading() {
 
     <section style="margin-top:24px;">
       <h2>${t('trading.strategy_presets')}</h2>
-      <div class="card ${selectedStrategy==='low'?'preset-active':''}" data-pick="low" style="cursor:pointer;">
-        <div class="row between">
-          <h3 style="margin:0;">🎯 ${t('trading.preset_low')}</h3>
-          ${selectedStrategy==='low' ? `<span style="color:#22c55e;">✓</span>`:''}
-        </div>
-        <p style="font-size:13px; color:var(--text-2); margin:6px 0 0;">${t('trading.preset_low_desc')}</p>
+      <div class="row" style="gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+        <button class="btn sm ${selectedStrategy==='low_target'?'':'ghost'}" data-preset="low_target">🎯 ${t('trading.preset_low')}</button>
+        <button class="btn sm ${selectedStrategy==='high_lead'?'':'ghost'}" data-preset="high_lead">📈 ${t('trading.preset_lead')}</button>
       </div>
-      <div class="card ${selectedStrategy==='lead'?'preset-active':''}" data-pick="lead" style="cursor:pointer; margin-top:8px;">
-        <div class="row between">
-          <h3 style="margin:0;">📈 ${t('trading.preset_lead')}</h3>
-          ${selectedStrategy==='lead' ? `<span style="color:#22c55e;">✓</span>`:''}
+      <details ${cfg.active?'':'open'}>
+        <summary style="cursor:pointer; font-weight:600; padding:8px 0;">⚙ ${t('trading.advanced')}</summary>
+        <p style="font-size:12px; color:var(--text-3); margin:4px 0 12px;">${t('trading.advanced_hint')}</p>
+        <div class="card">
+          <div class="grid-2" style="gap:10px;">
+            <label class="form-row"><span>${t('trading.p_bet_size')}</span>
+              <input type="number" id="f-bet" min="0.5" max="1000" step="0.5" value="${cfg.bet_size_usd}" /></label>
+            <label class="form-row"><span>${t('trading.p_max_cycles')}</span>
+              <input type="number" id="f-max" min="0" max="10000" step="1" value="${cfg.max_cycles_per_session}" /></label>
+            <label class="form-row"><span>${t('trading.p_entry_price')}</span>
+              <input type="number" id="f-entry" min="0.01" max="0.99" step="0.01" value="${cfg.entry_price}" /></label>
+            <label class="form-row"><span>${t('trading.p_entry_tol')}</span>
+              <input type="number" id="f-tol" min="0" max="0.5" step="0.01" value="${cfg.entry_tolerance}" /></label>
+            <label class="form-row"><span>${t('trading.p_max_entry')}</span>
+              <input type="number" id="f-maxe" min="0.5" max="0.99" step="0.01" value="${cfg.max_entry_price}" /></label>
+            <label class="form-row"><span>${t('trading.p_tp')}</span>
+              <input type="number" id="f-tp" min="0.02" max="0.99" step="0.01" value="${cfg.tp_price}" /></label>
+            <label class="form-row"><span>${t('trading.p_sl')}</span>
+              <input type="number" id="f-sl" min="0.01" max="0.5" step="0.01" value="${cfg.sl_price}" /></label>
+            <label class="form-row"><span>${t('trading.p_tradeable')}</span>
+              <input type="number" id="f-trd" min="0.05" max="1" step="0.05" value="${cfg.tradeable_pct}" /></label>
+            <label class="form-row"><span>${t('trading.p_remaining')}</span>
+              <input type="number" id="f-rem" min="0.05" max="1" step="0.05" value="${cfg.buy_when_remaining_below_pct}" /></label>
+            <label class="form-row"><span>${t('trading.p_buy_type')}</span>
+              <select id="f-buyt">
+                <option value="limit" ${cfg.buy_order_type==='limit'?'selected':''}>limit</option>
+                <option value="market" ${cfg.buy_order_type==='market'?'selected':''}>market</option>
+              </select></label>
+            <label class="form-row"><span>${t('trading.p_sell_type')}</span>
+              <select id="f-sellt">
+                <option value="limit" ${cfg.sell_order_type==='limit'?'selected':''}>limit</option>
+                <option value="market" ${cfg.sell_order_type==='market'?'selected':''}>market</option>
+              </select></label>
+          </div>
+          <button class="btn" id="btn-strat-save" style="width:100%; margin-top:12px;">${t('trading.p_save')}</button>
+          <p style="font-size:11px; color:var(--text-3); margin:8px 0 0;">${t('trading.token_used_msg')}</p>
         </div>
-        <p style="font-size:13px; color:var(--text-2); margin:6px 0 0;">${t('trading.preset_lead_desc')}</p>
-      </div>
+      </details>
     </section>
 
     <section style="margin-top:24px;">
@@ -431,18 +485,69 @@ async function pageTrading() {
   const startBtn = document.getElementById('btn-trade-start');
   const stopBtn = document.getElementById('btn-trade-stop');
   if (startBtn) startBtn.onclick = async () => {
-    const strat = localStorage.getItem('streak_preset') || selectedStrategy || 'lead';
     try {
-      await api('/api/trading/start', {
-        method: 'POST',
-        body: JSON.stringify({ strategy: strat, max_cycles: 0 }),
-      });
+      await api('/api/trading/start', { method: 'POST' });
       showToast('✓ ' + t('trading.running'));
       pageTrading();
     } catch (e) {
       if (e.status === 402) showToast(t('trading.need_tokens'));
-      else showToast(e.message || t('common.error'));
+      else showToast(e.body || e.message || t('common.error'));
     }
+  };
+
+  // 자산 + duration 변경
+  main.querySelectorAll('[data-asset]').forEach(b => {
+    if (b.disabled) return;
+    b.onclick = async () => {
+      try {
+        await api('/api/trading/config', {
+          method: 'PUT',
+          body: JSON.stringify({ asset: b.dataset.asset, duration_min: parseInt(b.dataset.dur) }),
+        });
+        pageTrading();
+      } catch (e) { showToast(e.body || e.message); }
+    };
+  });
+
+  // 프리셋 (entry_mode 빠른 변경)
+  main.querySelectorAll('[data-preset]').forEach(b => {
+    b.onclick = async () => {
+      const preset = b.dataset.preset;
+      const presets = {
+        low_target: { entry_mode: 'low_target', entry_price: 0.10, tp_price: 0.15, sl_price: 0.05 },
+        high_lead:  { entry_mode: 'high_lead',  entry_price: 0.70, tp_price: 0.95, sl_price: 0.50, max_entry_price: 0.85 },
+      };
+      try {
+        await api('/api/trading/config', {
+          method: 'PUT',
+          body: JSON.stringify(presets[preset]),
+        });
+        pageTrading();
+      } catch (e) { showToast(e.body || e.message); }
+    };
+  });
+
+  // 고급 전략 저장
+  const stratSave = document.getElementById('btn-strat-save');
+  if (stratSave) stratSave.onclick = async () => {
+    const body = {
+      bet_size_usd: parseFloat(document.getElementById('f-bet').value),
+      max_cycles_per_session: parseInt(document.getElementById('f-max').value),
+      entry_price: parseFloat(document.getElementById('f-entry').value),
+      entry_tolerance: parseFloat(document.getElementById('f-tol').value),
+      max_entry_price: parseFloat(document.getElementById('f-maxe').value),
+      tp_price: parseFloat(document.getElementById('f-tp').value),
+      sl_price: parseFloat(document.getElementById('f-sl').value),
+      tradeable_pct: parseFloat(document.getElementById('f-trd').value),
+      buy_when_remaining_below_pct: parseFloat(document.getElementById('f-rem').value),
+      buy_order_type: document.getElementById('f-buyt').value,
+      sell_order_type: document.getElementById('f-sellt').value,
+    };
+    try {
+      await api('/api/trading/config', { method: 'PUT', body: JSON.stringify(body) });
+      showToast('✓ ' + t('trading.p_saved'));
+      pageTrading();
+    } catch (e) { showToast(e.body || e.message); }
   };
   if (stopBtn) stopBtn.onclick = async () => {
     try {
@@ -451,21 +556,6 @@ async function pageTrading() {
       pageTrading();
     } catch (e) { showToast(e.message); }
   };
-  main.querySelectorAll('[data-pick]').forEach(el => {
-    el.onclick = async () => {
-      const pick = el.dataset.pick;
-      localStorage.setItem('streak_preset', pick);
-      if (cfg.active) {
-        try {
-          await api('/api/trading/start', {
-            method: 'POST',
-            body: JSON.stringify({ strategy: pick, max_cycles: cfg.max_cycles }),
-          });
-        } catch (e) { showToast(e.message); }
-      }
-      pageTrading();
-    };
-  });
   const needGo = document.getElementById('btn-need-go');
   if (needGo) needGo.onclick = () => navigate('referrals');
 
@@ -483,6 +573,81 @@ async function pageTrading() {
     };
     tick();
   }
+}
+
+function openWalletModal() {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `position:fixed; inset:0; background:rgba(0,0,0,.6);
+    display:flex; align-items:center; justify-content:center; z-index:1000;
+    padding:16px; backdrop-filter:blur(6px); overflow:auto;`;
+  overlay.innerHTML = `
+    <div style="background:var(--bg); border-radius:20px; padding:24px;
+                max-width:420px; width:100%; box-shadow:var(--shadow-lg); max-height:90vh; overflow:auto;">
+      <h2 style="margin:0 0 8px;">${t('trading.wallet_section')}</h2>
+      <div style="background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.3); border-radius:12px; padding:14px; margin-bottom:16px;">
+        <div style="font-weight:700; color:#ef4444; margin-bottom:8px;">${t('trading.wallet_warn_title')}</div>
+        <ul style="margin:0; padding-left:18px; font-size:12px; line-height:1.6; color:var(--text-2);">
+          <li>${t('trading.wallet_warn_1')}</li>
+          <li>${t('trading.wallet_warn_2')}</li>
+          <li>${t('trading.wallet_warn_3')}</li>
+          <li>${t('trading.wallet_warn_4')}</li>
+        </ul>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:12px; color:var(--text-3);">${t('trading.wallet_pk_label')}</label>
+        <input id="wm-pk" type="password" placeholder="${t('trading.wallet_pk_ph')}"
+               style="width:100%; margin-top:4px; padding:10px 12px; border-radius:10px;
+                      border:1px solid var(--border); background:var(--bg-2); color:var(--text);
+                      font-family:monospace; font-size:12px;" />
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:12px; color:var(--text-3);">${t('trading.wallet_funder_label')}</label>
+        <input id="wm-funder" type="text" placeholder="0x..."
+               style="width:100%; margin-top:4px; padding:10px 12px; border-radius:10px;
+                      border:1px solid var(--border); background:var(--bg-2); color:var(--text);
+                      font-family:monospace; font-size:12px;" />
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="font-size:12px; color:var(--text-3);">${t('trading.wallet_max_trade')}</label>
+        <input id="wm-max" type="number" min="1" max="1000" value="10" step="1"
+               style="width:100%; margin-top:4px; padding:10px 12px; border-radius:10px;
+                      border:1px solid var(--border); background:var(--bg-2); color:var(--text);" />
+      </div>
+      <div class="row" style="gap:8px;">
+        <button class="btn" id="wm-save" style="flex:1;">${t('trading.wallet_save')}</button>
+        <button class="btn ghost" id="wm-cancel">${t('common.cancel')}</button>
+      </div>
+      <button class="btn danger sm" id="wm-remove" style="margin-top:12px; width:100%;">
+        ${t('trading.wallet_remove')}
+      </button>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.onclick = (e) => { if (e.target === overlay) close(); };
+  overlay.querySelector('#wm-cancel').onclick = close;
+  overlay.querySelector('#wm-save').onclick = async () => {
+    const pk = overlay.querySelector('#wm-pk').value.trim();
+    const funder = overlay.querySelector('#wm-funder').value.trim() || null;
+    const max = parseFloat(overlay.querySelector('#wm-max').value) || 10;
+    if (pk.replace(/^0x/, '').length !== 64) { showToast(t('trading.wallet_pk_label')); return; }
+    try {
+      await api('/api/wallet/set', {
+        method: 'POST',
+        body: JSON.stringify({ private_key: pk, funder_address: funder, max_trade_usd: max }),
+      });
+      showToast('✓ ' + t('trading.wallet_saved'));
+      close();
+      if (state.page === 'trading') pageTrading();
+    } catch (e) { showToast(e.body || e.message); }
+  };
+  overlay.querySelector('#wm-remove').onclick = async () => {
+    try {
+      await api('/api/wallet/remove', { method: 'DELETE' });
+      showToast(t('trading.wallet_removed'));
+      close();
+      if (state.page === 'trading') pageTrading();
+    } catch (e) { showToast(e.message); }
+  };
 }
 
 function pageTradingOLD() {

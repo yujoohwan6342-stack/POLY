@@ -31,12 +31,40 @@ class TokenTx(SQLModel, table=True):
 
 
 class TradingConfig(SQLModel, table=True):
-    """사용자별 자동 매매 설정 (활성/비활성, 전략)."""
+    """사용자별 자동 매매 설정 — 종합 전략 파라미터.
+
+    bot/streak.py DEFAULT_CONFIG 와 동일한 의미. 사용자별로 저장.
+    """
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id", index=True, unique=True)
-    strategy: str = Field(default="lead")                   # low / lead
+
+    # ── 자산 & 마켓 ──
+    asset: str = Field(default="BTC")                       # BTC / ETH / SOL (현재 BTC만 활성)
+    duration_min: int = Field(default=5)                    # 5 / 15 / 60 (현재 5만 활성)
+
+    # ── 진입 ──
+    entry_mode: str = Field(default="low_target")           # low_target / high_lead
+    bet_size_usd: float = Field(default=1.0)                # 1회 베팅 금액
+    entry_price: float = Field(default=0.10)                # low_target: 목표 매수가
+    entry_tolerance: float = Field(default=0.01)            # ± tolerance 범위에서 fill 허용
+    max_entry_price: float = Field(default=0.85)            # high_lead: ask 상한
+
+    # ── 청산 ──
+    tp_price: float = Field(default=0.15)                   # take profit
+    sl_price: float = Field(default=0.05)                   # stop loss
+    buy_order_type: str = Field(default="limit")            # limit / market
+    sell_order_type: str = Field(default="limit")           # limit / market
+
+    # ── 시간 게이트 ──
+    tradeable_pct: float = Field(default=0.60)              # 진행률 < 이 값일 때만 매수
+    buy_when_remaining_below_pct: float = Field(default=1.0)  # 잔여 % ≤ 이 값일 때만
+
+    # ── 한도 ──
+    max_cycles_per_session: int = Field(default=0)          # 0 = 무제한
+
+    # ── 상태 ──
+    strategy: str = Field(default="low")                    # 단축어 (UI compat)
     active: bool = Field(default=False)
-    max_cycles: int = Field(default=0)                      # 0 = 무제한 (잔액까지)
     cycles_consumed: int = Field(default=0)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
