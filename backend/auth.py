@@ -7,14 +7,12 @@
   4. 서버 = uid로 User 조회/생성 (없으면 가입 보너스 + 추천 처리)
 """
 import logging
+import os
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel
 from sqlmodel import Session, select
-
-import firebase_admin
-from firebase_admin import auth as fb_auth, credentials
 
 from . import config
 from .db import get_session
@@ -25,24 +23,43 @@ log = logging.getLogger("auth")
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
-# ─── Firebase Admin SDK 초기화 ───────────────────────────────────
+# ─── Firebase Admin SDK 지연 초기화 (없어도 서버는 동작) ─────────
 
 _firebase_initialized = False
+_firebase_failed = False
+_firebase_error = ""
 
 
 def _ensure_firebase():
-    global _firebase_initialized
+    """필요할 때만 초기화. 실패해도 예외 던지지 않고 사용 시점에 503 반환."""
+    global _firebase_initialized, _firebase_failed, _firebase_error
     if _firebase_initialized:
-        return
+        return True
+    if _firebase_failed:
+        return False
     try:
-        # GOOGLE_APPLICATION_CREDENTIALS 경로가 있으면 사용, 없으면 기본 (GCP 환경)
-        cred = credentials.ApplicationDefault()
+        import firebase_admin
+        from firebase_admin import credentials
+
+        cred_path = config.GOOGLE_APPLICATION_CREDENTIALS
+        if cred_path and os.path.exists(cred_path):
+            cred = credentials.Certificate(cred_path)
+        else:
+            cred = credentials.ApplicationDefault()
         firebase_admin.initialize_app(cred, {"projectId": config.FIREBASE_PROJECT_ID})
         _firebase_initialized = True
         log.info(f"Firebase Admin initialized for {config.FIREBASE_PROJECT_ID}")
+        return True
     except Exception as e:
-        log.error(f"Firebase Admin init failed: {e}")
-        raise
+        _firebase_failed = True
+        _firebase_error = str(e)
+        log.warning(f"Firebase Admin not available: {e} — auth endpoints will return 503")
+        return False
+
+
+def is_firebase_ready() -> bool:
+    """공개 헬퍼 — config endpoint 등에서 사용."""
+    return _ensure_firebase()
 
 
 # ─── Dependency: 현재 사용자 (모든 인증 필요한 API에서 사용) ──
@@ -52,13 +69,15 @@ def get_current_user(
     session: Session = Depends(get_session),
 ) -> User:
     """Firebase ID token 검증 → 내부 User 조회 또는 생성."""
-    _ensure_firebase()
+    if not _ensure_firebase():
+        raise HTTPException(503, f"firebase_not_configured: {_firebase_error}")
 
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(401, "missing token")
     id_token = authorization.split(" ", 1)[1]
 
     try:
+        from firebase_admin import auth as fb_auth
         decoded = fb_auth.verify_id_token(id_token)
     except Exception as e:
         log.warning(f"token verify failed: {e}")
@@ -108,13 +127,15 @@ def register(
     session: Session = Depends(get_session),
 ):
     """첫 로그인 시 호출. 가입 보너스 + 추천 코드 처리."""
-    _ensure_firebase()
+    if not _ensure_firebase():
+        raise HTTPException(503, f"firebase_not_configured: {_firebase_error}")
 
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(401, "missing token")
     id_token = authorization.split(" ", 1)[1]
 
     try:
+        from firebase_admin import auth as fb_auth
         decoded = fb_auth.verify_id_token(id_token)
     except Exception as e:
         raise HTTPException(401, f"invalid token: {e}")

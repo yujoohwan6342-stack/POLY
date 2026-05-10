@@ -8,7 +8,7 @@ BASE_DIR = Path(__file__).parent
 DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{BASE_DIR}/streak.db")
 
 # Firebase Auth
-FIREBASE_PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "project-205632245559")
+FIREBASE_PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "hedam-poly")
 # 클라이언트가 읽는 공개 config (백엔드가 /api/config로 노출)
 FIREBASE_API_KEY = os.environ.get("FIREBASE_API_KEY", "")
 FIREBASE_AUTH_DOMAIN = os.environ.get("FIREBASE_AUTH_DOMAIN", "")
