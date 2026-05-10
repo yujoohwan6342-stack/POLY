@@ -75,13 +75,23 @@ def health():
 
 @app.get("/api/config")
 def public_config():
-    """Frontend가 필요로 하는 공개 설정."""
+    """Frontend가 필요로 하는 공개 설정 (Firebase config 포함)."""
     return {
-        "signup_bonus": config.SIGNUP_BONUS_CYCLES,
-        "ref_l1": config.REFERRAL_L1_CYCLES,
-        "ref_l2": config.REFERRAL_L2_CYCLES,
-        "referred_bonus": config.REFERRED_BONUS_CYCLES,
+        "signup_bonus_anon": config.SIGNUP_BONUS_ANON,
+        "signup_bonus_google": config.SIGNUP_BONUS_GOOGLE,
+        "upgrade_bonus": config.UPGRADE_BONUS,
+        "ref_l1": config.REFERRAL_L1_TOKENS,
+        "ref_l2": config.REFERRAL_L2_TOKENS,
+        "referred_bonus": config.REFERRED_BONUS_TOKENS,
         "cost_per_cycle": config.COST_PER_CYCLE,
+        "firebase": {
+            "apiKey": config.FIREBASE_API_KEY,
+            "authDomain": config.FIREBASE_AUTH_DOMAIN,
+            "projectId": config.FIREBASE_PROJECT_ID,
+            "storageBucket": config.FIREBASE_STORAGE_BUCKET,
+            "messagingSenderId": config.FIREBASE_MESSAGING_SENDER_ID,
+            "appId": config.FIREBASE_APP_ID,
+        },
     }
 
 

@@ -20,7 +20,11 @@
     "by_signing": "서명 시 이용약관에 동의하는 것으로 간주됩니다",
     "login_required": "거래 시작하려면 로그인이 필요해요",
     "login_required_desc": "가입하면 무료 10 토큰 즉시 지급",
-    "later": "다음에"
+    "later": "다음에",
+    "choose_method": "시작 방법 선택",
+    "choose_desc": "익명은 빠름, Google은 계정 저장 + 보너스",
+    "google": "Google 로그인",
+    "anonymous": "익명으로 시작"
   },
   "landing": {
     "hero_title": "폴리마켓 BTC 5분 마켓 자동 매매",
@@ -50,7 +54,10 @@
     "stopped_status": "봇 정지",
     "no_bot": "봇 미연결",
     "deploy_bot": "봇 설치",
-    "deploy_guide": "본인 서버에 한 줄 명령으로 설치"
+    "deploy_guide": "본인 서버에 한 줄 명령으로 설치",
+    "upgrade_title": "Google 계정으로 업그레이드",
+    "upgrade_desc": "계정 영구 저장 + {tokens} 토큰 추가 지급",
+    "upgrade_cta": "Google 계정 연결"
   },
   "wallet": {
     "title": "내 토큰",

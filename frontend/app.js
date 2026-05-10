@@ -1,16 +1,17 @@
-// STREAK SPA — minimal vanilla JS
+// STREAK SPA — Firebase Anonymous + Google auth
 (() => {
 'use strict';
 
-// ─── State ───────────────────────────────────────────────────────
 const state = {
-  lang: localStorage.getItem('streak_lang') || (navigator.language.startsWith('ko') ? 'ko' : navigator.language.startsWith('zh') ? 'zh' : 'en'),
+  lang: localStorage.getItem('streak_lang') ||
+        (navigator.language.startsWith('ko') ? 'ko' :
+         navigator.language.startsWith('zh') ? 'zh' : 'en'),
   i18n: {},
-  token: localStorage.getItem('streak_jwt') || null,
-  user: null,           // { address, referral_code, tokens, locale }
+  user: null,            // { address: firebase_uid, referral_code, tokens, locale, auth_method, email }
   page: 'home',
-  config: null,         // public config from /api/config
+  config: null,
   refFromUrl: new URLSearchParams(location.search).get('ref'),
+  fbApp: null, fbAuth: null, fbUser: null,
 };
 
 // ─── i18n ────────────────────────────────────────────────────────
@@ -22,7 +23,6 @@ async function loadI18n(lang) {
   document.documentElement.lang = lang;
   applyI18n();
 }
-
 function t(key, vars = {}) {
   const path = key.split('.');
   let v = state.i18n;
@@ -30,11 +30,8 @@ function t(key, vars = {}) {
   if (typeof v !== 'string') return key;
   return v.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '');
 }
-
 function applyI18n() {
-  document.querySelectorAll('[data-i]').forEach(el => {
-    el.textContent = t(el.dataset.i);
-  });
+  document.querySelectorAll('[data-i]').forEach(el => { el.textContent = t(el.dataset.i); });
   document.querySelectorAll('#lang-switch button').forEach(b => {
     b.classList.toggle('active', b.dataset.lang === state.lang);
   });
@@ -43,122 +40,143 @@ function applyI18n() {
 // ─── API ─────────────────────────────────────────────────────────
 async function api(path, opts = {}) {
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
-  if (state.token) headers['Authorization'] = `Bearer ${state.token}`;
+  if (state.fbUser) {
+    const tok = await state.fbUser.getIdToken();
+    headers['Authorization'] = `Bearer ${tok}`;
+  }
   const r = await fetch(path, { ...opts, headers });
-  if (r.status === 401) { logout(); throw new Error('unauthorized'); }
   if (!r.ok) {
     const txt = await r.text();
-    throw new Error(`HTTP ${r.status}: ${txt}`);
+    throw Object.assign(new Error(`HTTP ${r.status}`), { status: r.status, body: txt });
   }
   return r.json();
 }
 
-// ─── MetaMask + SIWE ─────────────────────────────────────────────
-async function ensurePolygon() {
-  if (!window.ethereum) throw new Error('no_metamask');
-  const chainId = await ethereum.request({ method: 'eth_chainId' });
-  if (chainId !== '0x89') {
-    try {
-      await ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x89' }] });
-    } catch (e) {
-      if (e.code === 4902) {
-        await ethereum.request({
-          method: 'wallet_addEthereumChain',
-          params: [{
-            chainId: '0x89', chainName: 'Polygon',
-            nativeCurrency: { name: 'MATIC', symbol: 'MATIC', decimals: 18 },
-            rpcUrls: ['https://polygon-rpc.com'],
-            blockExplorerUrls: ['https://polygonscan.com'],
-          }],
-        });
-      } else throw e;
-    }
-  }
+// ─── Firebase init ───────────────────────────────────────────────
+function waitForFirebaseSDK() {
+  return new Promise(res => {
+    if (window.firebaseSDK) return res();
+    window.addEventListener('firebase-sdk-ready', res, { once: true });
+  });
 }
 
-async function connectWallet() {
-  if (!window.ethereum) {
-    showToast(t('auth.no_metamask'));
-    window.open('https://metamask.io/download/', '_blank');
-    return;
+async function initFirebase(cfg) {
+  await waitForFirebaseSDK();
+  const sdk = window.firebaseSDK;
+  if (!cfg.apiKey) {
+    showToast('Firebase config not set on server'); return;
   }
+  state.fbApp = sdk.initializeApp(cfg);
+  state.fbAuth = sdk.getAuth(state.fbApp);
+
+  return new Promise(res => {
+    sdk.onAuthStateChanged(state.fbAuth, async (fbUser) => {
+      state.fbUser = fbUser;
+      if (fbUser) {
+        await syncBackendUser();
+      } else {
+        state.user = null;
+      }
+      render();
+      res();
+    });
+  });
+}
+
+async function syncBackendUser() {
+  // /api/auth/me 시도 → 404면 register 호출
   try {
-    await ensurePolygon();
-    const [address] = await ethereum.request({ method: 'eth_requestAccounts' });
-    const nonceData = await api('/api/auth/nonce');
-    const issued = nonceData.issued_at;
-    const message =
-      `${nonceData.domain} wants you to sign in with your Ethereum account:\n` +
-      `${address}\n\n` +
-      `Sign in to STREAK\n\n` +
-      `URI: ${nonceData.uri}\n` +
-      `Version: 1\n` +
-      `Chain ID: ${nonceData.chain_id}\n` +
-      `Nonce: ${nonceData.nonce}\n` +
-      `Issued At: ${issued}`;
-    const signature = await ethereum.request({
-      method: 'personal_sign', params: [message, address]
-    });
-    const session = await api('/api/auth/verify', {
-      method: 'POST',
-      body: JSON.stringify({
-        message, signature,
-        referral_code: state.refFromUrl,
-      }),
-    });
-    state.token = session.token;
-    state.user = session;
-    localStorage.setItem('streak_jwt', state.token);
-    if (state.refFromUrl) {
-      // 1회만 사용
-      const url = new URL(location.href);
-      url.searchParams.delete('ref');
-      history.replaceState({}, '', url);
-      state.refFromUrl = null;
-    }
-    render();
+    state.user = await api('/api/auth/me');
   } catch (e) {
-    console.error(e);
-    showToast(e.message || t('common.error'));
+    if (e.status === 404) {
+      // 신규 가입 (referral 코드 포함)
+      try {
+        state.user = await api('/api/auth/register', {
+          method: 'POST',
+          body: JSON.stringify({ referral_code: state.refFromUrl }),
+        });
+        if (state.refFromUrl) {
+          const url = new URL(location.href);
+          url.searchParams.delete('ref');
+          history.replaceState({}, '', url);
+          state.refFromUrl = null;
+        }
+      } catch (ee) { console.error('register failed', ee); showToast(t('common.error')); }
+    } else {
+      console.error(e); showToast(t('common.error'));
+    }
   }
 }
 
-function logout() {
-  state.token = null;
-  state.user = null;
-  localStorage.removeItem('streak_jwt');
-  render();
+// ─── Auth actions ────────────────────────────────────────────────
+async function signInAnon() {
+  try {
+    await window.firebaseSDK.signInAnonymously(state.fbAuth);
+  } catch (e) {
+    console.error(e); showToast(e.message || t('common.error'));
+  }
+}
+
+async function signInGoogle() {
+  try {
+    const provider = new window.firebaseSDK.GoogleAuthProvider();
+    if (state.fbUser && state.fbUser.isAnonymous) {
+      // 익명 → Google 업그레이드 (UID 유지 + +10 보너스)
+      await window.firebaseSDK.linkWithPopup(state.fbUser, provider);
+    } else {
+      await window.firebaseSDK.signInWithPopup(state.fbAuth, provider);
+    }
+  } catch (e) {
+    if (e.code === 'auth/credential-already-in-use') {
+      // 다른 익명 계정과 이미 연결된 Google 계정 — 그냥 sign in
+      try {
+        await window.firebaseSDK.signInWithPopup(state.fbAuth, new window.firebaseSDK.GoogleAuthProvider());
+      } catch (e2) { showToast(e2.message); }
+    } else if (e.code === 'auth/popup-closed-by-user') {
+      // user closed popup — silent
+    } else {
+      console.error(e); showToast(e.message || t('common.error'));
+    }
+  }
+}
+
+async function signOutUser() {
+  await window.firebaseSDK.signOut(state.fbAuth);
 }
 
 // ─── UI helpers ──────────────────────────────────────────────────
 function showToast(msg, ms = 1800) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
   clearTimeout(showToast._t);
-  showToast._t = setTimeout(() => t.classList.remove('show'), ms);
+  showToast._t = setTimeout(() => el.classList.remove('show'), ms);
 }
-
-function shortAddr(a) { return a.slice(0, 6) + '…' + a.slice(-4); }
-function copy(text, msg) {
-  navigator.clipboard.writeText(text);
-  showToast(msg || t('wallet.copied'));
-}
+function shortAddr(a) { return (a || '').slice(0, 6) + '…' + (a || '').slice(-4); }
+function copy(text, msg) { navigator.clipboard.writeText(text); showToast(msg || t('wallet.copied')); }
 
 // ─── Pages ───────────────────────────────────────────────────────
 async function pageHome() {
   const main = document.getElementById('main');
+  const isAnon = state.user.auth_method === 'anonymous';
   main.innerHTML = `
     <section>
       <div class="card hero">
         <div class="label">${t('home.balance_label')}</div>
         <div class="value">${state.user.tokens.toLocaleString()}</div>
-        <div class="sub">${t('home.cycles_left', { n: Math.floor(state.user.tokens / (state.config?.cost_per_cycle || 1)) })}</div>
+        <div class="sub">${t('home.cycles_left', { n: state.user.tokens })}</div>
       </div>
     </section>
+    ${isAnon ? `
+      <section class="card" style="border-left: 3px solid var(--primary);">
+        <h3>🎁 ${t('home.upgrade_title')}</h3>
+        <p>${t('home.upgrade_desc', { tokens: state.config.upgrade_bonus })}</p>
+        <button class="btn" id="btn-upgrade">${t('home.upgrade_cta')}</button>
+      </section>
+    ` : ''}
     <section class="grid-2">
-      <button class="btn ghost" id="btn-topup">💳 ${t('home.topup')}</button>
       <button class="btn ghost" id="btn-invite">🎁 ${t('home.invite')}</button>
+      <button class="btn ghost" id="btn-deploy">⚙ ${t('home.deploy_bot')}</button>
     </section>
     <section>
       <div class="card">
@@ -169,8 +187,9 @@ async function pageHome() {
       </div>
     </section>
   `;
-  document.getElementById('btn-topup').onclick = () => navigate('wallet');
+  if (isAnon) document.getElementById('btn-upgrade').onclick = signInGoogle;
   document.getElementById('btn-invite').onclick = () => navigate('referrals');
+  document.getElementById('btn-deploy').onclick = () => navigate('settings');
 }
 
 async function pageWallet() {
@@ -185,11 +204,10 @@ async function pageWallet() {
     <section class="card">
       <div class="label">${t('wallet.your_address')}</div>
       <div class="row between">
-        <span class="addr-pill">${shortAddr(state.user.address)}</span>
-        <button class="btn sm ghost" id="btn-copy-addr">${t('wallet.copy')}</button>
+        <span class="addr-pill">${state.user.email || shortAddr(state.user.address)}</span>
+        <span style="font-size:11px; color:var(--text-3);">${state.user.auth_method}</span>
       </div>
     </section>
-
     <h2 style="margin-top:24px;">${t('wallet.earn_title')}</h2>
     <section class="card">
       <h3 style="color:var(--text);">🎁 ${t('wallet.earn_invite')}</h3>
@@ -200,33 +218,26 @@ async function pageWallet() {
       <h3 style="color:var(--text);">📺 ${t('wallet.earn_ads')}</h3>
       <p style="color:var(--text-3);">${t('wallet.earn_ads_desc')}</p>
     </section>
-
     <section class="card">
       <h2>${t('wallet.history')}</h2>
       <div id="tx-list" class="tx-list"><div class="empty">${t('common.loading')}</div></div>
     </section>
   `;
-  document.getElementById('btn-copy-addr').onclick = () => copy(state.user.address);
   document.getElementById('btn-go-ref').onclick = () => navigate('referrals');
-
   const list = document.getElementById('tx-list');
   try {
     const rows = await api('/api/tokens/history?limit=30');
-    if (rows.length === 0) {
+    if (!rows.length) {
       list.innerHTML = `<div class="empty">${t('wallet.no_history')}</div>`;
     } else {
       list.innerHTML = rows.map(tx => {
         const cls = tx.delta > 0 ? 'pos' : 'neg';
         const sign = tx.delta > 0 ? '+' : '';
         const ts = new Date(tx.created_at).toLocaleString();
-        return `
-          <div class="tx-item">
-            <div>
-              <div>${tx.kind}</div>
-              <div class="meta">${ts}${tx.note ? ' · ' + tx.note : ''}</div>
-            </div>
-            <div class="tx-amount ${cls}">${sign}${tx.delta}</div>
-          </div>`;
+        return `<div class="tx-item">
+          <div><div>${tx.kind}</div><div class="meta">${ts}${tx.note ? ' · ' + tx.note : ''}</div></div>
+          <div class="tx-amount ${cls}">${sign}${tx.delta}</div>
+        </div>`;
       }).join('');
     }
   } catch (e) { list.innerHTML = `<div class="empty">${t('common.error')}</div>`; }
@@ -235,10 +246,9 @@ async function pageWallet() {
 function renderTree(node, depth = 0) {
   const indent = '  '.repeat(depth);
   const me = depth === 0 ? '🟢' : '└─';
-  let out = `${indent}${me} ${node.short}  ·  ${node.referral_code}  ·  ${node.joined}\n`;
-  for (const child of (node.children || [])) {
-    out += renderTree(child, depth + 1);
-  }
+  const tag = node.auth_method === 'google' ? '🌐' : node.auth_method === 'upgraded' ? '✨' : '👤';
+  let out = `${indent}${me} ${tag} ${node.short}  ·  ${node.referral_code}  ·  ${node.joined}\n`;
+  for (const c of (node.children || [])) out += renderTree(c, depth + 1);
   return out;
 }
 
@@ -263,14 +273,8 @@ async function pageReferrals() {
       <h3 style="color:var(--text);">${t('referrals.earn_l2', { tokens: state.config.ref_l2 })}</h3>
     </section>
     <section class="grid-2">
-      <div class="card">
-        <div class="label">${t('referrals.stats_direct')}</div>
-        <div class="value sm" id="stat-direct">—</div>
-      </div>
-      <div class="card">
-        <div class="label">${t('referrals.stats_indirect')}</div>
-        <div class="value sm" id="stat-indirect">—</div>
-      </div>
+      <div class="card"><div class="label">${t('referrals.stats_direct')}</div><div class="value sm" id="stat-direct">—</div></div>
+      <div class="card"><div class="label">${t('referrals.stats_indirect')}</div><div class="value sm" id="stat-indirect">—</div></div>
     </section>
     <section class="card">
       <div class="label">${t('referrals.stats_earned')}</div>
@@ -281,32 +285,35 @@ async function pageReferrals() {
       <div id="tree-area"></div>
     </section>
   `;
-
   const stats = await api('/api/referrals/stats');
   document.getElementById('invite-link').textContent = stats.invite_url;
   document.getElementById('stat-direct').textContent = stats.direct_count;
   document.getElementById('stat-indirect').textContent = stats.indirect_count;
   document.getElementById('stat-earned').textContent = stats.tokens_earned + ' ' + t('common.tokens');
-
   document.getElementById('btn-copy-code').onclick = () => copy(state.user.referral_code);
   document.getElementById('btn-copy-link').onclick = () => copy(stats.invite_url);
-
   const tree = await api('/api/referrals/tree');
   const area = document.getElementById('tree-area');
-  if (!tree.children || tree.children.length === 0) {
-    area.innerHTML = `<div class="empty">${t('referrals.no_referrals')}</div>`;
-  } else {
-    area.innerHTML = `<div class="tree">${renderTree(tree)}</div>`;
-  }
+  area.innerHTML = (tree.children?.length)
+    ? `<div class="tree">${renderTree(tree)}</div>`
+    : `<div class="empty">${t('referrals.no_referrals')}</div>`;
 }
 
 function pageSettings() {
   const main = document.getElementById('main');
+  const isAnon = state.user.auth_method === 'anonymous';
   main.innerHTML = `
     <h1>${t('settings.title')}</h1>
+    ${isAnon ? `
+      <section class="card" style="border-left: 3px solid var(--primary);">
+        <h3>🎁 ${t('home.upgrade_title')}</h3>
+        <p>${t('home.upgrade_desc', { tokens: state.config.upgrade_bonus })}</p>
+        <button class="btn" id="btn-upgrade-set">${t('home.upgrade_cta')}</button>
+      </section>
+    ` : ''}
     <section class="card">
       <div class="label">${t('settings.language')}</div>
-      <div class="row" style="margin-top:8px; gap: 8px;">
+      <div class="row" style="margin-top:8px; gap:8px;">
         ${['en','ko','zh'].map(l => `<button class="btn sm ${state.lang===l?'':'ghost'}" data-lang="${l}">${l.toUpperCase()}</button>`).join('')}
       </div>
     </section>
@@ -315,10 +322,11 @@ function pageSettings() {
       <button class="btn danger" id="btn-logout">${t('settings.disconnect')}</button>
     </section>
   `;
+  if (isAnon) document.getElementById('btn-upgrade-set').onclick = signInGoogle;
   main.querySelectorAll('[data-lang]').forEach(b => {
     b.onclick = async () => { await loadI18n(b.dataset.lang); pageSettings(); };
   });
-  document.getElementById('btn-logout').onclick = () => logout();
+  document.getElementById('btn-logout').onclick = () => signOutUser();
 }
 
 // ─── Routing ─────────────────────────────────────────────────────
@@ -331,9 +339,9 @@ function navigate(page) {
 }
 
 function render() {
-  if (!state.token || !state.user) {
+  if (!state.fbUser || !state.user) {
     document.getElementById('bottom-nav').style.display = 'none';
-    renderConnectScreen();
+    renderLanding();
     return;
   }
   document.getElementById('bottom-nav').style.display = 'flex';
@@ -346,125 +354,24 @@ function render() {
   }
 }
 
-function renderConnectScreen() {
-  // 첫 화면: 로그인 강요 X. 둘러보기 가능 + 액션 누르면 로그인 모달.
-  const main = document.getElementById('main');
-  main.innerHTML = `
-    <section style="padding: 32px 0 16px; text-align: center;">
-      <div style="font-size: 32px; font-weight: 800; letter-spacing: 0.18em;">STREAK</div>
-      <div style="color: var(--text-3); margin-top: 4px; font-size: 13px;">${t('tagline')}</div>
-    </section>
-
-    <section class="counter">
-      <div class="label"><span class="live-dot"></span>${t('home_counter.label')}</div>
-      <div class="number" id="counter-num">0</div>
-      <div class="subtitle">${t('home_counter.subtitle')}</div>
-    </section>
-
-    <section style="padding: 0 4px;">
-      <h2 style="font-size: 22px; line-height: 1.3; letter-spacing: -0.02em;">${t('landing.hero_title')}</h2>
-      <p style="font-size: 14px; color: var(--text-2); margin-bottom: 16px;">${t('landing.hero_sub')}</p>
-      <button class="btn" id="btn-start">${t('landing.cta_start')} →</button>
-    </section>
-
-    <section style="margin-top: 32px;">
-      <div class="grid-2" style="grid-template-columns: 1fr; gap: 12px;">
-        <div class="card">
-          <h3 style="color: var(--text);">⚡ ${t('landing.feature_1_title')}</h3>
-          <p style="margin: 4px 0 0; font-size: 13px;">${t('landing.feature_1_desc')}</p>
-        </div>
-        <div class="card">
-          <h3 style="color: var(--text);">📊 ${t('landing.feature_2_title')}</h3>
-          <p style="margin: 4px 0 0; font-size: 13px;">${t('landing.feature_2_desc')}</p>
-        </div>
-        <div class="card">
-          <h3 style="color: var(--text);">🎁 ${t('landing.feature_3_title')}</h3>
-          <p style="margin: 4px 0 0; font-size: 13px;">${t('landing.feature_3_desc')}</p>
-        </div>
-      </div>
-    </section>
-
-    <section style="margin-top: 32px;">
-      <h2>${t('landing.how_title')}</h2>
-      <div class="card">
-        <ol style="margin: 0; padding-left: 22px; color: var(--text-2); line-height: 2;">
-          <li>${t('landing.step_1')}</li>
-          <li>${t('landing.step_2')}</li>
-          <li>${t('landing.step_3')}</li>
-          <li>${t('landing.step_4')}</li>
-        </ol>
-      </div>
-    </section>
-
-    <section style="margin-top: 24px; text-align: center;">
-      <button class="btn ghost" id="btn-connect-bottom">🦊 ${t('auth.connect')}</button>
-      <p style="margin-top: 12px; font-size: 11px; color: var(--text-3);">${t('auth.by_signing')}</p>
-    </section>
-  `;
-  const trigger = () => requireLoginAndConnect();
-  document.getElementById('btn-start').onclick = trigger;
-  document.getElementById('btn-connect-bottom').onclick = trigger;
-  startCounter();
-}
-
-function requireLoginAndConnect() {
-  // 모달로 로그인 권유 (강요 X — Maybe later 옵션)
-  const overlay = document.createElement('div');
-  overlay.style.cssText = `
-    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
-    display: flex; align-items: center; justify-content: center;
-    z-index: 1000; padding: 24px; backdrop-filter: blur(4px);
-  `;
-  overlay.innerHTML = `
-    <div style="background: var(--bg); border-radius: 20px; padding: 28px;
-                max-width: 360px; width: 100%; box-shadow: var(--shadow-lg);">
-      <div style="text-align: center; font-size: 40px; margin-bottom: 8px;">🦊</div>
-      <h2 style="margin: 0 0 6px; text-align: center;">${t('auth.login_required')}</h2>
-      <p style="text-align: center; color: var(--text-3); margin: 0 0 20px; font-size: 13px;">
-        ${t('auth.login_required_desc')}
-      </p>
-      <div class="col" style="gap: 8px;">
-        <button class="btn" id="modal-connect">${t('auth.connect')}</button>
-        <button class="btn ghost" id="modal-later">${t('auth.later')}</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-  const close = () => overlay.remove();
-  overlay.onclick = (e) => { if (e.target === overlay) close(); };
-  overlay.querySelector('#modal-later').onclick = close;
-  overlay.querySelector('#modal-connect').onclick = async () => {
-    close();
-    await connectWallet();
-  };
-}
-
-// 누적 가입자 카운터 — 자동 증가 애니메이션 + 폴링
-let _counterTimer = null;
-let _counterTarget = 0;
-let _counterDisplay = 0;
-
+// ─── Counter ─────────────────────────────────────────────────────
+let _counterTimer = null, _counterTarget = 0, _counterDisplay = 0;
 function startCounter() {
   if (_counterTimer) clearInterval(_counterTimer);
-
   async function fetchTotal() {
     try {
       const r = await fetch('/api/stats/public').then(x => x.json());
       _counterTarget = r.total_users || 0;
-    } catch (e) {}
+    } catch {}
   }
   fetchTotal();
-  setInterval(fetchTotal, 10000);  // 10초마다 폴링
-
-  // count-up animation @ 60fps
+  setInterval(fetchTotal, 10000);
   _counterTimer = setInterval(() => {
     const el = document.getElementById('counter-num');
     if (!el) { clearInterval(_counterTimer); return; }
     if (_counterDisplay < _counterTarget) {
-      const diff = _counterTarget - _counterDisplay;
-      const step = Math.max(1, Math.ceil(diff / 30));
-      _counterDisplay += step;
-      if (_counterDisplay > _counterTarget) _counterDisplay = _counterTarget;
+      const step = Math.max(1, Math.ceil((_counterTarget - _counterDisplay) / 30));
+      _counterDisplay = Math.min(_counterTarget, _counterDisplay + step);
       el.textContent = _counterDisplay.toLocaleString();
       el.classList.add('bump');
       setTimeout(() => el.classList.remove('bump'), 400);
@@ -472,10 +379,72 @@ function startCounter() {
   }, 60);
 }
 
+// ─── Landing (로그인 X) ──────────────────────────────────────────
+function renderLanding() {
+  const main = document.getElementById('main');
+  main.innerHTML = `
+    <section style="padding: 32px 0 16px; text-align:center;">
+      <div style="font-size: 32px; font-weight: 800; letter-spacing: 0.18em;">STREAK</div>
+      <div style="color: var(--text-3); margin-top: 4px; font-size: 13px;">${t('tagline')}</div>
+    </section>
+    <section class="counter">
+      <div class="label"><span class="live-dot"></span>${t('home_counter.label')}</div>
+      <div class="number" id="counter-num">0</div>
+      <div class="subtitle">${t('home_counter.subtitle')}</div>
+    </section>
+    <section style="padding: 0 4px;">
+      <h2 style="font-size:22px; line-height:1.3; letter-spacing:-0.02em;">${t('landing.hero_title')}</h2>
+      <p style="font-size:14px; color:var(--text-2); margin-bottom:16px;">${t('landing.hero_sub')}</p>
+      <button class="btn" id="btn-start">${t('landing.cta_start')} →</button>
+    </section>
+    <section style="margin-top:32px;">
+      <div class="grid-2" style="grid-template-columns:1fr; gap:12px;">
+        <div class="card"><h3>⚡ ${t('landing.feature_1_title')}</h3><p style="margin:4px 0 0;font-size:13px;">${t('landing.feature_1_desc')}</p></div>
+        <div class="card"><h3>📊 ${t('landing.feature_2_title')}</h3><p style="margin:4px 0 0;font-size:13px;">${t('landing.feature_2_desc')}</p></div>
+        <div class="card"><h3>🎁 ${t('landing.feature_3_title')}</h3><p style="margin:4px 0 0;font-size:13px;">${t('landing.feature_3_desc')}</p></div>
+      </div>
+    </section>
+  `;
+  document.getElementById('btn-start').onclick = openSignInModal;
+  startCounter();
+}
+
+function openSignInModal() {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `position:fixed; inset:0; background:rgba(0,0,0,0.5);
+    display:flex; align-items:center; justify-content:center; z-index:1000;
+    padding:24px; backdrop-filter:blur(4px);`;
+  overlay.innerHTML = `
+    <div style="background:var(--bg); border-radius:20px; padding:28px;
+                max-width:360px; width:100%; box-shadow:var(--shadow-lg);">
+      <div style="text-align:center; font-size:40px; margin-bottom:8px;">🚀</div>
+      <h2 style="margin:0 0 6px; text-align:center;">${t('auth.choose_method')}</h2>
+      <p style="text-align:center; color:var(--text-3); margin:0 0 20px; font-size:13px;">
+        ${t('auth.choose_desc')}
+      </p>
+      <div class="col" style="gap:8px;">
+        <button class="btn" id="m-google" style="background:#fff; color:#000; border:1px solid var(--border);">
+          <span style="font-size:18px;">G</span> ${t('auth.google')} (+${state.config.signup_bonus_google})
+        </button>
+        <button class="btn ghost" id="m-anon">
+          👤 ${t('auth.anonymous')} (+${state.config.signup_bonus_anon})
+        </button>
+        <button class="btn ghost" id="m-cancel" style="margin-top:6px;">${t('auth.later')}</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.onclick = (e) => { if (e.target === overlay) close(); };
+  overlay.querySelector('#m-cancel').onclick = close;
+  overlay.querySelector('#m-anon').onclick = async () => { close(); await signInAnon(); };
+  overlay.querySelector('#m-google').onclick = async () => { close(); await signInGoogle(); };
+}
+
 // ─── Init ────────────────────────────────────────────────────────
 async function init() {
   await loadI18n(state.lang);
-  state.config = await api('/api/config');
+  state.config = await fetch('/api/config').then(r => r.json());
 
   document.querySelectorAll('#lang-switch button').forEach(b => {
     b.onclick = () => loadI18n(b.dataset.lang).then(render);
@@ -484,13 +453,13 @@ async function init() {
     a.onclick = (e) => { e.preventDefault(); navigate(a.dataset.page); };
   });
 
-  if (state.token) {
-    try {
-      const me = await api('/api/auth/me');
-      state.user = { address: me.address, referral_code: me.referral_code, tokens: me.tokens, locale: me.locale };
-    } catch { state.token = null; localStorage.removeItem('streak_jwt'); }
+  render();  // 첫 화면 (랜딩)
+
+  if (state.config.firebase && state.config.firebase.apiKey) {
+    await initFirebase(state.config.firebase);
+  } else {
+    showToast('Firebase config missing — server admin must set FIREBASE_API_KEY env');
   }
-  render();
 }
 
 init().catch(e => { console.error(e); showToast(t('common.error')); });

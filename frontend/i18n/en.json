@@ -20,7 +20,11 @@
     "by_signing": "By signing, you agree to our Terms of Use",
     "login_required": "Sign in to start trading",
     "login_required_desc": "Free 10 tokens on signup",
-    "later": "Maybe later"
+    "later": "Maybe later",
+    "choose_method": "Choose how to start",
+    "choose_desc": "Anonymous is fastest, Google saves your account",
+    "google": "Continue with Google",
+    "anonymous": "Continue as guest"
   },
   "landing": {
     "hero_title": "Trade Polymarket BTC 5-min markets automatically",
@@ -50,7 +54,10 @@
     "stopped_status": "Bot stopped",
     "no_bot": "No bot connected",
     "deploy_bot": "Deploy bot",
-    "deploy_guide": "Run on your server / VPS in one command"
+    "deploy_guide": "Run on your server / VPS in one command",
+    "upgrade_title": "Upgrade to Google",
+    "upgrade_desc": "Save your account permanently and get +{tokens} tokens",
+    "upgrade_cta": "Continue with Google"
   },
   "wallet": {
     "title": "My Tokens",

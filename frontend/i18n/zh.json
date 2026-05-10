@@ -20,7 +20,11 @@
     "by_signing": "签名即表示同意服务条款",
     "login_required": "登录后即可开始交易",
     "login_required_desc": "注册即送 10 个免费代币",
-    "later": "稍后"
+    "later": "稍后",
+    "choose_method": "选择登录方式",
+    "choose_desc": "匿名最快,Google 保存账号并获得奖励",
+    "google": "使用 Google 登录",
+    "anonymous": "匿名继续"
   },
   "landing": {
     "hero_title": "Polymarket BTC 5 分钟市场自动交易",
@@ -50,7 +54,10 @@
     "stopped_status": "机器人已停止",
     "no_bot": "未连接机器人",
     "deploy_bot": "部署机器人",
-    "deploy_guide": "在您自己的服务器上一键部署"
+    "deploy_guide": "在您自己的服务器上一键部署",
+    "upgrade_title": "升级到 Google 账号",
+    "upgrade_desc": "永久保存账号并获得 +{tokens} 代币",
+    "upgrade_cta": "使用 Google 登录"
   },
   "wallet": {
     "title": "我的代币",

@@ -6,6 +6,18 @@
 <meta name="theme-color" content="#3182f6" />
 <title>STREAK</title>
 <link rel="stylesheet" href="/static/styles.css" />
+<script type="module">
+  // Firebase SDK loader (config는 /api/config에서 받아 동적 init)
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
+  import {
+    getAuth, signInAnonymously, GoogleAuthProvider, signInWithPopup,
+    linkWithPopup, onAuthStateChanged, signOut
+  } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
+  window.firebaseSDK = { initializeApp, getAuth, signInAnonymously,
+                         GoogleAuthProvider, signInWithPopup, linkWithPopup,
+                         onAuthStateChanged, signOut };
+  window.dispatchEvent(new Event('firebase-sdk-ready'));
+</script>
 </head>
 <body>
   <div class="app">
