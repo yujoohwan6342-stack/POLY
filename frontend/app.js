@@ -191,6 +191,22 @@ async function pageWallet() {
     <section class="card">
       <h2>${t('wallet.topup_title')}</h2>
       <p>${t('wallet.topup_instructions')}</p>
+
+      <div class="label">${t('wallet.accepted_tokens')}</div>
+      <div class="row wrap" style="gap:6px; margin: 6px 0 14px;">
+        ${(state.config.accepted_tokens || []).map(tok => `
+          <span class="addr-pill" title="${tok.contract}">
+            <strong style="color:var(--text);">${tok.symbol}</strong>
+            <span style="color:var(--text-3); font-size:10px;">
+              ${tok.stable ? '$1' : '⚡'}
+            </span>
+          </span>
+        `).join('')}
+      </div>
+      <div class="sub" style="margin-bottom:14px;">
+        ${t('wallet.live_price_note')}
+      </div>
+
       <div class="label">${t('wallet.deposit_address')}</div>
       <div class="row between" style="margin-top:6px;">
         <code style="word-break:break-all;font-size:11px;">${state.config.deposit_address}</code>

@@ -84,12 +84,20 @@ def public_config():
     return {
         "deposit_address": config.DEPOSIT_ADDRESS,
         "chain_id": config.CHAIN_ID,
-        "usdc_contract": config.USDC_CONTRACT,
         "signup_bonus": config.SIGNUP_BONUS_TOKENS,
         "ref_l1": config.REFERRAL_L1_TOKENS,
         "ref_l2": config.REFERRAL_L2_TOKENS,
         "cost_per_cycle": config.COST_PER_CYCLE,
         "token_per_cent": config.TOKEN_PER_CENT,
+        "accepted_tokens": [
+            {
+                "symbol": t["symbol"],
+                "contract": t["contract"],
+                "decimals": t["decimals"],
+                "stable": t.get("stable", False),
+            }
+            for t in config.ACCEPTED_TOKENS
+        ],
     }
 
 
