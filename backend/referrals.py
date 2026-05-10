@@ -28,14 +28,14 @@ def handle_signup_referral(session: Session, new_user: User,
     """신규 가입자 처리: 본인 가입 보너스 + 추천인 보상 (L1, L2 분배)."""
     from .tokens import credit  # circular import 방지
 
-    # 1) 가입 보너스
-    credit(session, new_user, config.SIGNUP_BONUS_TOKENS, "signup",
+    # 1) 가입 보너스 (모든 신규 가입자)
+    credit(session, new_user, config.SIGNUP_BONUS_CYCLES, "signup",
            note="welcome bonus")
 
     if not referral_code:
         return
 
-    # 2) L1 추천인
+    # 2) 추천 코드 통해 가입 → 추천인(L1) + 추천받은 사람(self)에게 보너스
     referrer = session.exec(
         select(User).where(User.referral_code == referral_code.upper())
     ).first()
@@ -46,16 +46,21 @@ def handle_signup_referral(session: Session, new_user: User,
     session.add(new_user)
     session.commit()
 
-    credit(session, referrer, config.REFERRAL_L1_TOKENS, "ref_l1",
-           ref_id=str(new_user.id), note=f"L1 ref of {new_user.address[:8]}")
+    # 추천받은 사람에게 추가 보너스
+    credit(session, new_user, config.REFERRED_BONUS_CYCLES, "referred",
+           ref_id=str(referrer.id), note=f"invited by {referrer.referral_code}")
 
-    # 3) L2 추천인 (referrer를 추천한 사람)
+    # 추천인에게 보너스
+    credit(session, referrer, config.REFERRAL_L1_CYCLES, "ref_l1",
+           ref_id=str(new_user.id), note=f"invited {new_user.address[:8]}")
+
+    # 3) L2 (추천인의 추천인 = 간접 추천)
     if referrer.referred_by_id:
         l2 = session.get(User, referrer.referred_by_id)
         if l2:
-            credit(session, l2, config.REFERRAL_L2_TOKENS, "ref_l2",
+            credit(session, l2, config.REFERRAL_L2_CYCLES, "ref_l2",
                    ref_id=str(new_user.id),
-                   note=f"L2 ref of {new_user.address[:8]} via {referrer.address[:8]}")
+                   note=f"L2 via {referrer.address[:8]}")
 
 
 # ─── API ──────────────────────────────────────────────────────────
@@ -126,7 +131,7 @@ def get_stats(user: User = Depends(get_current_user),
     earned_rows = session.exec(
         select(TokenTx).where(
             TokenTx.user_id == user.id,
-            TokenTx.kind.in_(["ref_l1", "ref_l2"])
+            TokenTx.kind.in_(["ref_l1", "ref_l2", "referred"])
         )
     ).all()
     tokens_earned = sum(t.delta for t in earned_rows)

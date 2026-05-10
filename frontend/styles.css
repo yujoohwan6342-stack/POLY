@@ -218,6 +218,55 @@ input:focus { outline: none; border-color: var(--primary); }
   color: var(--text-2);
 }
 
+/* Live counter */
+.counter {
+  text-align: center;
+  margin: 24px 0 32px;
+}
+.counter .label {
+  font-size: 12px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+.counter .number {
+  font-size: 48px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, var(--primary), #8b5cf6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-variant-numeric: tabular-nums;
+  display: inline-block;
+  min-width: 60px;
+}
+.counter .number.bump { animation: bump 0.4s ease-out; }
+@keyframes bump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+.counter .subtitle {
+  font-size: 13px;
+  color: var(--text-3);
+  margin-top: 6px;
+}
+.live-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: var(--pos);
+  border-radius: 50%;
+  margin-right: 6px;
+  animation: pulse 1.4s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
 /* Connect screen */
 .connect-screen {
   display: flex;

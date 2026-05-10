@@ -42,18 +42,6 @@ class Cycle(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
 
-class Deposit(SQLModel, table=True):
-    """온체인 USDC 입금 감지 → 토큰 부여."""
-    id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="user.id", index=True)
-    tx_hash: str = Field(index=True, unique=True)
-    block_number: int
-    from_address: str
-    amount_usdc: float                                  # USDC (decimal)
-    tokens_credited: int
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-
 class Nonce(SQLModel, table=True):
     """SIWE nonce — 1회용."""
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -63,8 +51,3 @@ class Nonce(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
 
-class IndexerCursor(SQLModel, table=True):
-    """USDC 입금 폴링이 어디까지 봤는지."""
-    id: Optional[int] = Field(default=None, primary_key=True)
-    name: str = Field(unique=True)                      # 'usdc_deposit'
-    last_block: int = Field(default=0)

@@ -177,6 +177,11 @@ async function pageWallet() {
   const main = document.getElementById('main');
   main.innerHTML = `
     <h1>${t('wallet.title')}</h1>
+    <section class="card hero">
+      <div class="label">${t('wallet.balance')}</div>
+      <div class="value">${state.user.tokens.toLocaleString()}</div>
+      <div class="sub">${state.user.tokens} ${t('common.tokens')}</div>
+    </section>
     <section class="card">
       <div class="label">${t('wallet.your_address')}</div>
       <div class="row between">
@@ -184,43 +189,25 @@ async function pageWallet() {
         <button class="btn sm ghost" id="btn-copy-addr">${t('wallet.copy')}</button>
       </div>
     </section>
+
+    <h2 style="margin-top:24px;">${t('wallet.earn_title')}</h2>
     <section class="card">
-      <div class="label">${t('wallet.balance')}</div>
-      <div class="value">${state.user.tokens.toLocaleString()} <span style="font-size:14px;color:var(--text-3);">${t('common.tokens')}</span></div>
+      <h3 style="color:var(--text);">🎁 ${t('wallet.earn_invite')}</h3>
+      <p>${t('wallet.earn_invite_desc', { tokens: state.config.ref_l1 })}</p>
+      <button class="btn ghost" id="btn-go-ref">→ ${t('referrals.title')}</button>
     </section>
     <section class="card">
-      <h2>${t('wallet.topup_title')}</h2>
-      <p>${t('wallet.topup_instructions')}</p>
-
-      <div class="label">${t('wallet.accepted_tokens')}</div>
-      <div class="row wrap" style="gap:6px; margin: 6px 0 14px;">
-        ${(state.config.accepted_tokens || []).map(tok => `
-          <span class="addr-pill" title="${tok.contract}">
-            <strong style="color:var(--text);">${tok.symbol}</strong>
-            <span style="color:var(--text-3); font-size:10px;">
-              ${tok.stable ? '$1' : '⚡'}
-            </span>
-          </span>
-        `).join('')}
-      </div>
-      <div class="sub" style="margin-bottom:14px;">
-        ${t('wallet.live_price_note')}
-      </div>
-
-      <div class="label">${t('wallet.deposit_address')}</div>
-      <div class="row between" style="margin-top:6px;">
-        <code style="word-break:break-all;font-size:11px;">${state.config.deposit_address}</code>
-        <button class="btn sm" id="btn-copy-dep">${t('wallet.copy')}</button>
-      </div>
-      <div class="sub">${t('wallet.min_amount')}</div>
+      <h3 style="color:var(--text);">📺 ${t('wallet.earn_ads')}</h3>
+      <p style="color:var(--text-3);">${t('wallet.earn_ads_desc')}</p>
     </section>
+
     <section class="card">
       <h2>${t('wallet.history')}</h2>
       <div id="tx-list" class="tx-list"><div class="empty">${t('common.loading')}</div></div>
     </section>
   `;
   document.getElementById('btn-copy-addr').onclick = () => copy(state.user.address);
-  document.getElementById('btn-copy-dep').onclick = () => copy(state.config.deposit_address);
+  document.getElementById('btn-go-ref').onclick = () => navigate('referrals');
 
   const list = document.getElementById('tx-list');
   try {
@@ -365,11 +352,50 @@ function renderConnectScreen() {
     <div class="connect-screen">
       <div class="logo">STREAK</div>
       <div class="tagline">${t('tagline')}</div>
+      <div class="counter" style="margin: 32px 0;">
+        <div class="label"><span class="live-dot"></span>${t('home_counter.label')}</div>
+        <div class="number" id="counter-num">0</div>
+        <div class="subtitle">${t('home_counter.subtitle')}</div>
+      </div>
       <button class="btn" id="btn-connect">🦊 ${t('auth.connect')}</button>
       <p style="margin-top:24px; font-size:12px; color:var(--text-3);">${t('auth.by_signing')}</p>
     </div>
   `;
   document.getElementById('btn-connect').onclick = connectWallet;
+  startCounter();
+}
+
+// 누적 가입자 카운터 — 자동 증가 애니메이션 + 폴링
+let _counterTimer = null;
+let _counterTarget = 0;
+let _counterDisplay = 0;
+
+function startCounter() {
+  if (_counterTimer) clearInterval(_counterTimer);
+
+  async function fetchTotal() {
+    try {
+      const r = await fetch('/api/stats/public').then(x => x.json());
+      _counterTarget = r.total_users || 0;
+    } catch (e) {}
+  }
+  fetchTotal();
+  setInterval(fetchTotal, 10000);  // 10초마다 폴링
+
+  // count-up animation @ 60fps
+  _counterTimer = setInterval(() => {
+    const el = document.getElementById('counter-num');
+    if (!el) { clearInterval(_counterTimer); return; }
+    if (_counterDisplay < _counterTarget) {
+      const diff = _counterTarget - _counterDisplay;
+      const step = Math.max(1, Math.ceil(diff / 30));
+      _counterDisplay += step;
+      if (_counterDisplay > _counterTarget) _counterDisplay = _counterTarget;
+      el.textContent = _counterDisplay.toLocaleString();
+      el.classList.add('bump');
+      setTimeout(() => el.classList.remove('bump'), 400);
+    }
+  }, 60);
 }
 
 // ─── Init ────────────────────────────────────────────────────────

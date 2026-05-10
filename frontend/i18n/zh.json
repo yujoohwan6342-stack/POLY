@@ -33,20 +33,24 @@
     "deploy_guide": "在您自己的服务器上一键部署"
   },
   "wallet": {
-    "title": "钱包",
+    "title": "我的次数",
     "your_address": "您的地址",
-    "balance": "代币余额",
-    "topup_title": "充值",
-    "topup_instructions": "请将 Polygon 网络上任何支持的代币转入以下地址。系统按实时价格自动换算并充值(1 美分 = 1 代币)。",
-    "deposit_address": "充值地址 (Polygon)",
-    "accepted_tokens": "支持代币",
-    "stable_note": "稳定币 $1",
-    "live_price_note": "Chainlink 实时价格",
+    "balance": "可用次数",
+    "earn_title": "获得更多次数",
+    "earn_invite": "邀请好友",
+    "earn_invite_desc": "每位直接邀请 +{tokens} 次",
+    "earn_referred": "被邀请",
+    "earn_referred_desc": "注册时输入推荐码 → +{tokens} 次",
+    "earn_ads": "观看广告",
+    "earn_ads_desc": "即将推出",
     "copy": "复制",
     "copied": "已复制!",
-    "min_amount": "最低 1 美元",
-    "history": "交易记录",
-    "no_history": "暂无交易记录"
+    "history": "使用记录",
+    "no_history": "暂无活动"
+  },
+  "home_counter": {
+    "label": "累计会员",
+    "subtitle": "每分钟在增长"
   },
   "referrals": {
     "title": "推荐",

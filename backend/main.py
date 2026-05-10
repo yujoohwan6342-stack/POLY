@@ -19,9 +19,11 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
+from sqlmodel import Session, select, func
+
 from . import config, auth, tokens, referrals
-from .db import init_db
-from .deposits_worker import deposit_poller
+from .db import init_db, engine
+from .models import User, Cycle
 
 
 logging.basicConfig(
@@ -40,14 +42,7 @@ async def lifespan(app: FastAPI):
     """startup/shutdown."""
     init_db()
     log.info("DB initialized")
-
-    # 입금 폴링 워커 백그라운드 시작
-    task = asyncio.create_task(deposit_poller())
-    log.info("deposit poller started (USDC → %s)", config.DEPOSIT_ADDRESS)
-
     yield
-
-    task.cancel()
     log.info("shutting down")
 
 
@@ -82,22 +77,23 @@ def health():
 def public_config():
     """Frontend가 필요로 하는 공개 설정."""
     return {
-        "deposit_address": config.DEPOSIT_ADDRESS,
-        "chain_id": config.CHAIN_ID,
-        "signup_bonus": config.SIGNUP_BONUS_TOKENS,
-        "ref_l1": config.REFERRAL_L1_TOKENS,
-        "ref_l2": config.REFERRAL_L2_TOKENS,
+        "signup_bonus": config.SIGNUP_BONUS_CYCLES,
+        "ref_l1": config.REFERRAL_L1_CYCLES,
+        "ref_l2": config.REFERRAL_L2_CYCLES,
+        "referred_bonus": config.REFERRED_BONUS_CYCLES,
         "cost_per_cycle": config.COST_PER_CYCLE,
-        "token_per_cent": config.TOKEN_PER_CENT,
-        "accepted_tokens": [
-            {
-                "symbol": t["symbol"],
-                "contract": t["contract"],
-                "decimals": t["decimals"],
-                "stable": t.get("stable", False),
-            }
-            for t in config.ACCEPTED_TOKENS
-        ],
+    }
+
+
+@app.get("/api/stats/public")
+def public_stats():
+    """누적 가입자 수 등 (인증 없이 접근 가능)."""
+    with Session(engine) as session:
+        total_users = session.exec(select(func.count()).select_from(User)).one()
+        total_cycles = session.exec(select(func.count()).select_from(Cycle)).one()
+    return {
+        "total_users": total_users or 0,
+        "total_cycles": total_cycles or 0,
     }
 
 

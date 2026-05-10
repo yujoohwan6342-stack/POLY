@@ -33,20 +33,24 @@
     "deploy_guide": "Run on your server / VPS in one command"
   },
   "wallet": {
-    "title": "Wallet",
+    "title": "My Cycles",
     "your_address": "Your address",
-    "balance": "Token balance",
-    "topup_title": "Top up",
-    "topup_instructions": "Send any of the supported tokens on Polygon to the address below. Tokens are credited automatically based on real-time price (1¢ = 1 token).",
-    "deposit_address": "Deposit address (Polygon)",
-    "accepted_tokens": "Accepted tokens",
-    "stable_note": "Stable @ $1",
-    "live_price_note": "Live price via Chainlink",
+    "balance": "Cycle balance",
+    "earn_title": "Earn more cycles",
+    "earn_invite": "Invite friends",
+    "earn_invite_desc": "+{tokens} cycles per direct invite",
+    "earn_referred": "Get invited",
+    "earn_referred_desc": "Use someone's code at signup → +{tokens} cycles",
+    "earn_ads": "Watch ads",
+    "earn_ads_desc": "Coming soon",
     "copy": "Copy",
     "copied": "Copied!",
-    "min_amount": "Minimum $1",
-    "history": "Transaction history",
-    "no_history": "No transactions yet"
+    "history": "Cycle history",
+    "no_history": "No activity yet"
+  },
+  "home_counter": {
+    "label": "Total members",
+    "subtitle": "and growing every minute"
   },
   "referrals": {
     "title": "Referrals",
