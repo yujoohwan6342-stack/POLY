@@ -31,6 +31,7 @@ from .db import get_session, engine
 from .models import User, TradingConfig, Position, Cycle, TokenTx
 from .auth import get_current_user
 from .tokens import credit
+from . import polymarket_exec as pmx
 
 
 log = logging.getLogger("trading")
@@ -484,6 +485,117 @@ def _get_or_create_cfg(session: Session, user: User) -> TradingConfig:
         cfg = TradingConfig(user_id=user.id)
         session.add(cfg); session.commit(); session.refresh(cfg)
     return cfg
+
+
+# ──────────────────────────────────────────────────────────────────
+# Stateless 라이브 실행 — PK 는 매 호출 받아 즉시 폐기 (DB/로그 X)
+# ──────────────────────────────────────────────────────────────────
+@router.get("/market_data")
+def market_data(asset: str = "BTC", duration_min: int = 5):
+    """공개 마켓 + 호가 — 인증 없음. 브라우저가 5초마다 폴링."""
+    a = ASSETS.get(asset)
+    if not a:
+        raise HTTPException(400, "unknown asset")
+    if not is_active(asset, duration_min):
+        return {"available": False, "reason": "asset_duration_disabled"}
+    mkt = pmx.fetch_market(a["polymarket_slug_prefix"], duration_min)
+    if not mkt:
+        return {"available": False, "reason": "no_market"}
+    yes = pmx.fetch_book(mkt["yes_token"])
+    no = pmx.fetch_book(mkt["no_token"])
+    now = int(time.time())
+    elapsed = now - mkt["start_ts"]
+    return {
+        "available": True,
+        "market": mkt,
+        "yes_book": yes, "no_book": no,
+        "now_ts": now,
+        "elapsed_pct": elapsed / (duration_min * 60),
+        "remaining_sec": max(0, mkt["end_ts"] - now),
+    }
+
+
+class WalletCheckReq(BaseModel):
+    private_key: str = PField(..., min_length=64, max_length=68)
+    funder: Optional[str] = None
+
+
+@router.post("/wallet_check")
+def wallet_check(req: WalletCheckReq, user: User = Depends(get_current_user)):
+    """PK 정합성 + 잔액 확인 (1회). 응답 후 PK 즉시 release."""
+    pk = req.private_key.strip()
+    if pk.startswith("0x"):
+        pk_body = pk[2:]
+    else:
+        pk_body = pk
+    if len(pk_body) != 64 or not all(c in "0123456789abcdefABCDEF" for c in pk_body):
+        raise HTTPException(400, "invalid_pk_format")
+    try:
+        info = pmx.get_address_balance(pk, req.funder)
+    finally:
+        pk = None              # GC hint
+        pk_body = None
+    return info
+
+
+class ExecReq(BaseModel):
+    private_key: str = PField(..., min_length=64, max_length=68)
+    funder: Optional[str] = None
+    action: str                                          # buy / sell
+    token_id: str
+    price: float
+    size: float
+    order_type: str = "limit"                            # limit / market
+    max_price: Optional[float] = None
+    market_slug: Optional[str] = None                    # 토큰 차감 ref_id 용
+
+
+class ExecResp(BaseModel):
+    ok: bool
+    address: Optional[str] = None
+    error: Optional[str] = None
+    tokens_left: int
+    raw: Optional[dict] = None
+
+
+@router.post("/execute", response_model=ExecResp)
+def execute(req: ExecReq,
+            user: User = Depends(get_current_user),
+            session: Session = Depends(get_session)):
+    """단일 주문 실행. PK 는 함수 끝나면 release. DB 에 거래 기록 X."""
+    if req.action not in ("buy", "sell"):
+        raise HTTPException(400, "action must be buy/sell")
+    if req.order_type not in ("limit", "market"):
+        raise HTTPException(400, "order_type must be limit/market")
+
+    # 매수만 토큰 차감 (1 거래 사이클 = 매수 시점 기준; 매도는 후속 액션)
+    if req.action == "buy":
+        if user.tokens < config.COST_PER_CYCLE:
+            raise HTTPException(402, "insufficient_tokens")
+        try:
+            credit(session, user, -config.COST_PER_CYCLE, "cycle",
+                   ref_id=req.market_slug or "live", note=f"buy {req.token_id[:6]}")
+        except Exception as e:
+            raise HTTPException(500, f"token_consume_failed: {e}")
+
+    pk = req.private_key
+    try:
+        result = pmx.execute_order(
+            pk, action=req.action, token_id=req.token_id,
+            price=req.price, size=req.size, order_type=req.order_type,
+            funder=req.funder, max_price=req.max_price,
+        )
+    finally:
+        pk = None
+        # FastAPI/pydantic 가 req 보유 — 응답 직후 GC. 추가 zero-out 불가능 (Python 한계)
+
+    return ExecResp(
+        ok=bool(result.get("ok")),
+        address=result.get("address"),
+        error=result.get("error"),
+        tokens_left=user.tokens,
+        raw=result.get("raw") if result.get("ok") else None,
+    )
 
 
 @router.get("/assets")

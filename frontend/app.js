@@ -299,6 +299,273 @@ async function pageReferrals() {
     : `<div class="empty">${t('referrals.no_referrals')}</div>`;
 }
 
+// ─── LIVE strategy engine (browser-side) ─────────────────────────
+// PK 는 sessionStorage 또는 localStorage. 서버 전송은 매 거래 시점에만.
+const LIVE = {
+  loopId: null,
+  status: 'stopped',
+  walletInfo: null,
+  trades: [],     // local-only trade history
+  positions: [],  // local-only open positions
+  market: null,
+};
+
+function pkGet() {
+  return sessionStorage.getItem('streak_pk') || localStorage.getItem('streak_pk') || '';
+}
+function pkSet(pk, persist) {
+  pkClear();
+  if (persist) localStorage.setItem('streak_pk', pk);
+  else sessionStorage.setItem('streak_pk', pk);
+}
+function pkClear() {
+  sessionStorage.removeItem('streak_pk');
+  localStorage.removeItem('streak_pk');
+  sessionStorage.removeItem('streak_funder');
+  localStorage.removeItem('streak_funder');
+}
+function funderGet() {
+  return sessionStorage.getItem('streak_funder') || localStorage.getItem('streak_funder') || '';
+}
+
+function tradesLoad() {
+  try { LIVE.trades = JSON.parse(localStorage.getItem('streak_trades') || '[]'); }
+  catch { LIVE.trades = []; }
+  try { LIVE.positions = JSON.parse(localStorage.getItem('streak_positions') || '[]'); }
+  catch { LIVE.positions = []; }
+}
+function tradesSave() {
+  localStorage.setItem('streak_trades', JSON.stringify(LIVE.trades.slice(-200)));
+  localStorage.setItem('streak_positions', JSON.stringify(LIVE.positions));
+}
+
+function shouldEnterJS(cfg, mkt) {
+  const elapsedPct = mkt.elapsed_pct;
+  if (elapsedPct >= cfg.tradeable_pct) return null;
+  const remaining = 1 - elapsedPct;
+  if (remaining > cfg.buy_when_remaining_below_pct) return null;
+
+  const yb = mkt.yes_book.best_bid, ya = mkt.yes_book.best_ask;
+  const nb = mkt.no_book.best_bid,  na = mkt.no_book.best_ask;
+
+  if (cfg.entry_mode === 'low_target') {
+    const lo = cfg.entry_price - cfg.entry_tolerance;
+    const hi = cfg.entry_price + cfg.entry_tolerance;
+    const cands = [];
+    if (lo <= ya && ya <= hi) cands.push({side:'YES', token:mkt.market.yes_token, ask:ya});
+    if (lo <= na && na <= hi) cands.push({side:'NO',  token:mkt.market.no_token,  ask:na});
+    if (!cands.length) return null;
+    cands.sort((a,b)=>Math.abs(a.ask-cfg.entry_price)-Math.abs(b.ask-cfg.entry_price));
+    const c = cands[0];
+    return { side: c.side, token_id: c.token,
+             price: cfg.buy_order_type==='limit' ? cfg.entry_price : c.ask };
+  }
+  // high_lead
+  const leading = yb > nb ? {side:'YES', token:mkt.market.yes_token, ask:ya, bid:yb}
+                          : {side:'NO',  token:mkt.market.no_token,  ask:na, bid:nb};
+  if (leading.ask >= cfg.entry_price && leading.ask <= cfg.max_entry_price) {
+    return { side: leading.side, token_id: leading.token,
+             price: cfg.buy_order_type==='limit' ? cfg.entry_price : leading.ask };
+  }
+  return null;
+}
+
+function shouldExitJS(pos, cfg, mkt) {
+  const isYes = pos.side === 'YES';
+  const bid = isYes ? mkt.yes_book.best_bid : mkt.no_book.best_bid;
+  if (bid >= cfg.tp_price) return { price: cfg.sell_order_type==='limit'?cfg.tp_price:bid, reason:'tp' };
+  if (bid <= cfg.sl_price) return { price: cfg.sell_order_type==='limit'?cfg.sl_price:bid, reason:'sl' };
+  return null;
+}
+
+async function liveTick(cfg) {
+  const pk = pkGet();
+  if (!pk) { liveStop(); return; }
+  // 1) 마켓 데이터
+  let mkt;
+  try { mkt = await api(`/api/trading/market_data?asset=${cfg.asset}&duration_min=${cfg.duration_min}`); }
+  catch { return; }
+  if (!mkt.available) return;
+  LIVE.market = mkt;
+
+  // 2) 청산 체크 (현재 마켓에 우리 포지션 있으면)
+  for (const pos of [...LIVE.positions]) {
+    if (pos.market_slug !== mkt.market.slug) continue;
+    const ex = shouldExitJS(pos, cfg, mkt);
+    if (!ex) continue;
+    try {
+      const r = await api('/api/trading/execute', {
+        method: 'POST',
+        body: JSON.stringify({
+          private_key: pk, funder: funderGet() || null,
+          action: 'sell', token_id: pos.token_id,
+          price: ex.price, size: pos.size,
+          order_type: cfg.sell_order_type,
+          market_slug: mkt.market.slug,
+        }),
+      });
+      pos.exit_price = ex.price;
+      pos.exit_reason = ex.reason;
+      pos.closed_at = new Date().toISOString();
+      pos.pnl = (ex.price - pos.entry_price) * pos.size;
+      LIVE.trades.push({ ...pos, kind:'sell', ok:r.ok, error:r.error });
+      LIVE.positions = LIVE.positions.filter(p => p.id !== pos.id);
+      tradesSave();
+    } catch (e) { console.error('sell err', e); }
+  }
+
+  // 3) 진입 체크 (이미 이 마켓에 포지션 없을 때만)
+  const hasInMkt = LIVE.positions.some(p => p.market_slug === mkt.market.slug);
+  if (!hasInMkt) {
+    const dec = shouldEnterJS(cfg, mkt);
+    if (dec) {
+      // limit 모드: 호가가 entry_price 닿아야 fill 가능
+      const ya = mkt.yes_book.best_ask, na = mkt.no_book.best_ask;
+      const ask = dec.side === 'YES' ? ya : na;
+      if (cfg.buy_order_type === 'limit' && ask > dec.price + 0.001) {
+        // 아직 도달 안함 — pass
+      } else {
+        const fillPx = cfg.buy_order_type === 'market' ? ask : dec.price;
+        const sz = cfg.bet_size_usd / Math.max(0.01, fillPx);
+        try {
+          const r = await api('/api/trading/execute', {
+            method: 'POST',
+            body: JSON.stringify({
+              private_key: pk, funder: funderGet() || null,
+              action: 'buy', token_id: dec.token_id,
+              price: fillPx, size: parseFloat(sz.toFixed(2)),
+              order_type: cfg.buy_order_type,
+              market_slug: mkt.market.slug,
+              max_price: cfg.buy_order_type === 'market' ? Math.min(0.99, fillPx + 0.02) : null,
+            }),
+          });
+          if (r.ok) {
+            const pos = {
+              id: 'p_' + Date.now(),
+              market_slug: mkt.market.slug,
+              market_label: `${cfg.asset} ${cfg.duration_min}m ${dec.side}`,
+              side: dec.side, token_id: dec.token_id,
+              entry_price: fillPx, size: parseFloat(sz.toFixed(2)),
+              opened_at: new Date().toISOString(),
+              tokens_left: r.tokens_left, address: r.address,
+            };
+            LIVE.positions.push(pos);
+            LIVE.trades.push({ ...pos, kind:'buy', ok:true });
+            tradesSave();
+            // 토큰 잔액 갱신
+            if (state.user) state.user.tokens = r.tokens_left;
+          } else {
+            LIVE.trades.push({ kind:'buy', ok:false, error:r.error,
+              market_slug: mkt.market.slug, opened_at:new Date().toISOString() });
+            tradesSave();
+            if (state.user) state.user.tokens = r.tokens_left;
+            if (r.error && r.error.includes('insufficient')) liveStop();
+          }
+          if (state.page === 'trading') pageTrading();
+        } catch (e) {
+          console.error('buy err', e);
+          if (e.status === 402) { liveStop(); showToast(t('trading.need_tokens')); }
+        }
+      }
+    }
+  }
+}
+
+function liveStart(cfg) {
+  if (LIVE.loopId) return;
+  LIVE.status = 'running';
+  liveTick(cfg);
+  LIVE.loopId = setInterval(() => liveTick(cfg), 5000);
+}
+function liveStop() {
+  if (LIVE.loopId) clearInterval(LIVE.loopId);
+  LIVE.loopId = null;
+  LIVE.status = 'stopped';
+}
+
+function modeGet() { return localStorage.getItem('streak_mode') || 'paper'; }
+function modeSet(m) { localStorage.setItem('streak_mode', m); }
+
+// PK 모달
+function openPkModal() {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;
+    display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(6px);overflow:auto;`;
+  overlay.innerHTML = `
+    <div style="background:var(--bg);border-radius:20px;padding:24px;max-width:440px;width:100%;
+                box-shadow:var(--shadow-lg);max-height:92vh;overflow:auto;">
+      <h2 style="margin:0 0 8px;">${t('trading.pk_form_title')}</h2>
+      <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);
+                  border-radius:12px;padding:12px;margin-bottom:14px;">
+        <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.6;color:var(--text-2);">
+          <li>${t('trading.pk_form_warn1')}</li>
+          <li>${t('trading.pk_form_warn2')}</li>
+          <li>${t('trading.pk_form_warn3')}</li>
+        </ul>
+      </div>
+      <div style="margin-bottom:10px;">
+        <label style="font-size:12px;color:var(--text-3);">${t('trading.pk_input')}</label>
+        <input id="pk-in" type="password" autocomplete="off" placeholder="0x..."
+               style="width:100%;margin-top:4px;padding:10px;border-radius:10px;
+                      border:1px solid var(--border);background:var(--bg-2);color:var(--text);
+                      font-family:monospace;font-size:12px;" />
+      </div>
+      <div style="margin-bottom:10px;">
+        <label style="font-size:12px;color:var(--text-3);">${t('trading.pk_funder')}</label>
+        <input id="pk-fd" type="text" autocomplete="off" placeholder="0x..." value="${funderGet()}"
+               style="width:100%;margin-top:4px;padding:10px;border-radius:10px;
+                      border:1px solid var(--border);background:var(--bg-2);color:var(--text);
+                      font-family:monospace;font-size:12px;" />
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="font-size:12px;color:var(--text-3);">${t('trading.pk_storage')}</label>
+        <div class="row" style="gap:6px;margin-top:6px;">
+          <label style="font-size:12px;flex:1;cursor:pointer;">
+            <input type="radio" name="pk-st" value="session" checked /> ${t('trading.pk_session')}</label>
+          <label style="font-size:12px;flex:1;cursor:pointer;">
+            <input type="radio" name="pk-st" value="local" /> ${t('trading.pk_local')}</label>
+        </div>
+      </div>
+      <div class="row" style="gap:8px;">
+        <button class="btn" id="pk-go" style="flex:1;">${t('trading.pk_check')}</button>
+        <button class="btn ghost" id="pk-cancel">${t('common.cancel')}</button>
+      </div>
+      <button class="btn danger sm" id="pk-clr" style="width:100%;margin-top:10px;">
+        ${t('trading.pk_clear')}
+      </button>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.onclick = (e)=>{ if (e.target===overlay) close(); };
+  overlay.querySelector('#pk-cancel').onclick = close;
+  overlay.querySelector('#pk-clr').onclick = ()=>{
+    pkClear(); LIVE.walletInfo=null; liveStop();
+    showToast(t('trading.pk_cleared')); close();
+    if (state.page==='trading') pageTrading();
+  };
+  overlay.querySelector('#pk-go').onclick = async ()=>{
+    let pk = overlay.querySelector('#pk-in').value.trim();
+    const fd = overlay.querySelector('#pk-fd').value.trim();
+    const persist = overlay.querySelector('input[name=pk-st]:checked').value === 'local';
+    if (pk.replace(/^0x/, '').length !== 64) { showToast(t('trading.live_invalid_pk')); return; }
+    try {
+      const info = await api('/api/trading/wallet_check', {
+        method:'POST',
+        body: JSON.stringify({ private_key: pk, funder: fd || null }),
+      });
+      if (info.error) { showToast(info.error); return; }
+      pkSet(pk, persist);
+      if (fd) (persist?localStorage:sessionStorage).setItem('streak_funder', fd);
+      LIVE.walletInfo = info;
+      pk = null;     // GC hint
+      showToast('✓');
+      close();
+      if (state.page==='trading') pageTrading();
+    } catch (e) { showToast(e.body || e.message); }
+    finally { pk = null; }
+  };
+}
+
 async function pageTrading() {
   const main = document.getElementById('main');
   main.innerHTML = `<div class="card"><div class="empty">${t('common.loading')}</div></div>`;
@@ -315,9 +582,24 @@ async function pageTrading() {
   } catch (e) { console.error(e); showToast(t('common.error')); return; }
 
   const selectedStrategy = cfg.entry_mode || cfg.strategy || 'low_target';
-  const ms = stats.market_state || {};
-  const closeTs = ms.end_ts ? new Date(ms.end_ts * 1000) : null;
-  const elapsedPct = (ms.elapsed_pct || 0) * 100;
+  tradesLoad();
+  const mode = modeGet();
+  const isLive = mode === 'live';
+  const havePk = !!pkGet();
+
+  // 라이브 모드면 LIVE.market 사용 (브라우저-주도 폴링)
+  let ms, closeTs, elapsedPct;
+  if (isLive && LIVE.market && LIVE.market.available) {
+    const lm = LIVE.market;
+    ms = { slug: lm.market.slug, question: lm.market.question,
+           end_ts: lm.market.end_ts, elapsed_pct: lm.elapsed_pct };
+    closeTs = new Date(lm.market.end_ts * 1000);
+    elapsedPct = lm.elapsed_pct * 100;
+  } else {
+    ms = stats.market_state || {};
+    closeTs = ms.end_ts ? new Date(ms.end_ts * 1000) : null;
+    elapsedPct = (ms.elapsed_pct || 0) * 100;
+  }
   const sideBadge = (s) => s === 'YES'
     ? `<span style="background:rgba(34,197,94,.15); color:#22c55e; padding:2px 8px; border-radius:8px; font-size:11px; font-weight:600;">YES</span>`
     : `<span style="background:rgba(239,68,68,.15); color:#ef4444; padding:2px 8px; border-radius:8px; font-size:11px; font-weight:600;">NO</span>`;
@@ -336,9 +618,9 @@ async function pageTrading() {
         <div>
           <div class="label">${t('trading.bot_status')}</div>
           <div class="value sm" style="margin-top:4px;">
-            ${cfg.active
-              ? `<span style="color:#22c55e;">● ${t('trading.running')}</span>`
-              : `<span style="color:var(--text-3);">● ${t('trading.stopped')}</span>`}
+            ${(isLive ? LIVE.status === 'running' : cfg.active)
+              ? `<span style="color:#22c55e;">● ${isLive ? t('trading.live_loop_running') : t('trading.running')}</span>`
+              : `<span style="color:var(--text-3);">● ${isLive ? t('trading.live_loop_stopped') : t('trading.stopped')}</span>`}
           </div>
           ${ms.slug ? `
             <div class="sub" style="margin-top:8px; font-size:12px;">
@@ -354,12 +636,36 @@ async function pageTrading() {
             ` : ''}
         </div>
         <div>
-          ${cfg.active
+          ${(isLive ? LIVE.status === 'running' : cfg.active)
             ? `<button class="btn sm danger" id="btn-trade-stop">${t('trading.stop_btn')}</button>`
             : `<button class="btn sm" id="btn-trade-start">${t('trading.start_btn')} →</button>`}
         </div>
       </div>
       <p style="margin:12px 0 0; font-size:12px; color:var(--text-2);">${t('trading.auto_desc')}</p>
+    </section>
+
+    <section class="card" style="margin-top:12px;">
+      <div class="row between">
+        <div>
+          <div class="label">Mode</div>
+          <div class="row" style="gap:6px;margin-top:6px;">
+            <button class="btn sm ${!isLive?'':'ghost'}" data-mode="paper">${t('trading.paper_mode')}</button>
+            <button class="btn sm ${isLive?'':'ghost'}" data-mode="live">${t('trading.live_mode')}</button>
+          </div>
+        </div>
+        ${isLive ? `
+          <div style="text-align:right;">
+            <div class="label">${t('trading.wallet_section') || 'Wallet'}</div>
+            ${havePk && LIVE.walletInfo ? `
+              <div style="font-family:monospace;font-size:12px;margin-top:4px;">${LIVE.walletInfo.address?.slice(0,6)}…${LIVE.walletInfo.address?.slice(-4)}</div>
+              <div class="sub" style="font-size:11px;">$${(LIVE.walletInfo.balance_usdc||0).toFixed(2)} · all $${(LIVE.walletInfo.allowance_usdc||0).toFixed(2)}</div>
+            ` : `<div class="sub" style="color:var(--neg, #ef4444);">${t('trading.live_no_pk')}</div>`}
+            <button class="btn sm ghost" id="btn-pk" style="margin-top:6px;">
+              ${havePk ? '✎' : t('trading.wallet_connect')}
+            </button>
+          </div>` : ''}
+      </div>
+      ${isLive ? `<p class="sub" style="font-size:11px;margin:8px 0 0;color:var(--text-3);">${t('trading.tab_warning')}</p>` : ''}
     </section>
 
     <section class="card" style="margin-top:12px;">
@@ -441,32 +747,54 @@ async function pageTrading() {
 
     <section style="margin-top:24px;">
       <h2>${t('trading.open_positions')}</h2>
-      ${openPos.length === 0
-        ? `<div class="card"><div class="empty">${t('trading.no_open')}</div></div>`
-        : openPos.map(p => `
+      ${(() => {
+        const list = isLive ? LIVE.positions : openPos;
+        if (!list.length) return `<div class="card"><div class="empty">${t('trading.no_open')}</div></div>`;
+        return list.map(p => `
           <div class="card">
             <div class="row between">
               <div>
-                <div style="font-size:13px; color:var(--text-2);">${p.market_label}</div>
-                <div style="margin-top:4px;">${sideBadge(p.side)} <span style="font-size:12px; color:var(--text-3);">@ $${p.entry_price.toFixed(2)} · ${p.size.toFixed(0)} sh</span></div>
+                <div style="font-size:13px; color:var(--text-2);">${p.market_label || p.market_slug || ''}</div>
+                <div style="margin-top:4px;">${sideBadge(p.side)} <span style="font-size:12px; color:var(--text-3);">@ $${(p.entry_price||0).toFixed(2)} · ${(p.size||0).toFixed(2)} sh</span></div>
               </div>
-              <div style="font-size:11px; color:var(--text-3); text-align:right;">${p.strategy}</div>
+              <div style="font-size:11px; color:var(--text-3); text-align:right;">${p.strategy || ''}</div>
             </div>
-          </div>`).join('')}
+          </div>`).join('');
+      })()}
     </section>
 
     <section style="margin-top:24px;">
-      <h2>${t('trading.history_title')}</h2>
-      ${history.length === 0
-        ? `<div class="card"><div class="empty">${t('trading.no_history')}</div></div>`
-        : `<div class="tx-list">${history.map(p => `
+      <h2>${isLive ? t('trading.trades_local') : t('trading.history_title')}</h2>
+      ${(() => {
+        const list = isLive
+          ? LIVE.trades.slice().reverse().slice(0, 30)
+          : history;
+        const emptyMsg = isLive ? t('trading.no_trades_local') : t('trading.no_history');
+        if (!list.length) return `<div class="card"><div class="empty">${emptyMsg}</div></div>`;
+        if (isLive) {
+          return `<div class="tx-list">${list.map(p => {
+            const ts = new Date(p.closed_at || p.opened_at).toLocaleString();
+            const pnl = (typeof p.pnl === 'number') ? p.pnl : null;
+            const pnlStr = pnl != null ? `${pnl>=0?'+':''}$${pnl.toFixed(2)}` : '';
+            const okIcon = p.ok ? '✓' : '✗';
+            return `<div class="tx-item">
+              <div>
+                <div>${sideBadge(p.side||'YES')} <span style="font-size:12px;">${p.kind||''} ${p.market_slug||''}</span></div>
+                <div class="meta">${ts} · ${okIcon} ${p.error || p.exit_reason || ''}</div>
+              </div>
+              <div class="tx-amount ${pnl>=0?'pos':'neg'}">${pnlStr}</div>
+            </div>`;
+          }).join('')}</div>`;
+        }
+        return `<div class="tx-list">${list.map(p => `
             <div class="tx-item">
               <div>
                 <div>${sideBadge(p.side)} <span style="font-size:12px;">${p.market_label}</span></div>
-                <div class="meta">${new Date(p.closed_at || p.opened_at).toLocaleString()} · ${p.exit_reason === 'win' ? '✓ '+t('trading.win') : '✗ '+t('trading.loss')}</div>
+                <div class="meta">${new Date(p.closed_at || p.opened_at).toLocaleString()} · ${(p.exit_reason||'').startsWith('tp')||p.exit_reason==='expiry_win' ? '✓ '+t('trading.win') : '✗ '+t('trading.loss')}</div>
               </div>
-              <div class="tx-amount ${p.pnl>=0?'pos':'neg'}">${p.pnl>=0?'+':''}$${p.pnl.toFixed(2)}</div>
-            </div>`).join('')}</div>`}
+              <div class="tx-amount ${p.pnl>=0?'pos':'neg'}">${p.pnl>=0?'+':''}$${(p.pnl||0).toFixed(2)}</div>
+            </div>`).join('')}</div>`;
+      })()}
     </section>
 
     <section style="margin-top:24px;">
@@ -485,6 +813,13 @@ async function pageTrading() {
   const startBtn = document.getElementById('btn-trade-start');
   const stopBtn = document.getElementById('btn-trade-stop');
   if (startBtn) startBtn.onclick = async () => {
+    if (isLive) {
+      if (!havePk) { openPkModal(); return; }
+      liveStart(cfg);
+      showToast('✓ ' + t('trading.live_loop_running'));
+      pageTrading();
+      return;
+    }
     try {
       await api('/api/trading/start', { method: 'POST' });
       showToast('✓ ' + t('trading.running'));
@@ -494,6 +829,21 @@ async function pageTrading() {
       else showToast(e.body || e.message || t('common.error'));
     }
   };
+  if (stopBtn && isLive) stopBtn.onclick = () => {
+    liveStop(); showToast(t('trading.live_loop_stopped')); pageTrading();
+  };
+
+  // 모드 토글
+  main.querySelectorAll('[data-mode]').forEach(b => {
+    b.onclick = () => {
+      modeSet(b.dataset.mode);
+      liveStop();
+      pageTrading();
+    };
+  });
+  // PK 버튼
+  const pkBtn = document.getElementById('btn-pk');
+  if (pkBtn) pkBtn.onclick = () => openPkModal();
 
   // 자산 + duration 변경
   main.querySelectorAll('[data-asset]').forEach(b => {
@@ -558,6 +908,17 @@ async function pageTrading() {
   };
   const needGo = document.getElementById('btn-need-go');
   if (needGo) needGo.onclick = () => navigate('referrals');
+
+  // 라이브 + PK 있는데 walletInfo 미로드 시 한 번 조회
+  if (isLive && havePk && !LIVE.walletInfo) {
+    api('/api/trading/wallet_check', {
+      method:'POST',
+      body: JSON.stringify({ private_key: pkGet(), funder: funderGet() || null }),
+    }).then(info => {
+      LIVE.walletInfo = info;
+      if (state.page==='trading') pageTrading();
+    }).catch(()=>{});
+  }
 
   // countdown
   if (closeTs) {
