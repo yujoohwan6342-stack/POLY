@@ -31,13 +31,15 @@
     --bg: #0a0c10;
     --bg-soft: #14171c;
     --bg-card: #14171c;
-    --border: #1f242b;
-    --border-strong: #2c333c;
+    --border: #2c333c;
+    --border-strong: #3d444d;
     --text: #f1f3f5;
-    --text-2: #b6bcc4;
-    --text-3: #6e7681;
-    --text-4: #4a525d;
+    --text-2: #c4cad2;
+    --text-3: #8b949e;
+    --text-4: #5a636e;
     --primary-soft: #14213d;
+    --pos: #2ea043;
+    --neg: #f85149;
   }
 }
 
@@ -190,6 +192,9 @@ p  { margin: 0; color: var(--text-2); font-size: 13px; line-height: 1.55; }
   background: #0a0c10; color: white; border: none;
   position: relative; overflow: hidden;
 }
+@media (prefers-color-scheme: dark) {
+  .card.hero { background: #1a1f26; border: 1px solid var(--border); }
+}
 .card.hero .label, .card.hero .sub { color: rgba(255,255,255,0.55); }
 .card.hero .grid-line {
   position: absolute; inset: 0;
@@ -223,7 +228,7 @@ p  { margin: 0; color: var(--text-2); font-size: 13px; line-height: 1.55; }
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   padding: 14px 18px;
   border-radius: 10px; border: 1px solid transparent;
-  background: var(--text); color: white;
+  background: var(--text); color: var(--bg);
   font-size: 14px; font-weight: 600;
   width: 100%;
   letter-spacing: -0.005em;
@@ -232,13 +237,26 @@ p  { margin: 0; color: var(--text-2); font-size: 13px; line-height: 1.55; }
 .btn:hover { opacity: 0.92; }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn.lg { padding: 16px 20px; font-size: 15px; }
-.btn.primary { background: var(--primary); }
+.btn.primary { background: var(--primary); color: #ffffff; }
 .btn.ghost   { background: var(--bg-soft); color: var(--text); }
 .btn.outline { background: transparent; color: var(--text); border: 1px solid var(--border-strong); }
-.btn.danger  { background: var(--neg); }
+.btn.danger  { background: var(--neg); color: #ffffff; }
 .btn.sm { padding: 8px 12px; font-size: 12px; width: auto; border-radius: 8px; }
-.btn.white { background: #fff; color: var(--text); border: 1px solid var(--border); }
+/* .btn.white = always light bg + dark text, regardless of theme */
+.btn.white { background: #ffffff; color: #0a0c10; border: 1px solid var(--border); }
 .btn.link  { background: transparent; color: var(--text-2); width: auto; padding: 0; font-weight: 500; border: none; }
+
+/* Dark mode button overrides — declared LAST so source order wins.
+   Default .btn already inverts via var(--text)/var(--bg). */
+@media (prefers-color-scheme: dark) {
+  .btn          { background: #f1f3f5; color: #0a0c10; }
+  .btn.primary  { background: var(--primary); color: #ffffff; }
+  .btn.ghost    { background: var(--bg-soft); color: var(--text); border-color: var(--border); }
+  .btn.outline  { background: transparent;   color: var(--text); border-color: var(--border-strong); }
+  .btn.danger   { background: var(--neg);    color: #ffffff; }
+  .btn.white    { background: #f1f3f5;       color: #0a0c10; border: 1px solid var(--border); }
+  .btn.link     { background: transparent;   color: var(--text-2); }
+}
 
 /* ─── Pill ────────────────────────────────────────── */
 .pill {
@@ -250,7 +268,7 @@ p  { margin: 0; color: var(--text-2); font-size: 13px; line-height: 1.55; }
 }
 .pill.success { background: #e9f7ef; color: #007a44; }
 .pill.warn    { background: #fff5e0; color: #8a5a00; }
-.pill.dark    { background: var(--text); color: white; }
+.pill.dark    { background: var(--text); color: var(--bg); }
 .pill.outline { background: transparent; border: 1px solid var(--border-strong); color: var(--text-2); }
 .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 
@@ -308,7 +326,7 @@ p  { margin: 0; color: var(--text-2); font-size: 13px; line-height: 1.55; }
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0; font-variant-numeric: tabular-nums;
 }
-.tag-num.solid { background: var(--text); color: white; }
+.tag-num.solid { background: var(--text); color: var(--bg); }
 
 /* Steps */
 .steps { counter-reset: step; padding: 0; margin: 0; list-style: none; }
@@ -374,7 +392,7 @@ pre {
   background: var(--bg-soft); color: var(--text);
   flex-shrink: 0; letter-spacing: 0.02em;
 }
-.tree-line .avatar.me { background: var(--text); color: white; }
+.tree-line .avatar.me { background: var(--text); color: var(--bg); }
 .tree-line .id { font-family: "JetBrains Mono", monospace; font-size: 11px; }
 
 /* Stat tile */
@@ -408,16 +426,20 @@ pre {
 .section-head h2 { margin: 0; }
 .section-head a { font-size: 12px; color: var(--text-2); font-weight: 500; }
 
-/* Reward chip */
+/* Reward chip — bg/text invert pattern works in both themes */
 .reward {
   display: inline-flex; gap: 3px; align-items: center;
-  background: var(--text); color: white;
+  background: var(--text); color: var(--bg);
   padding: 3px 8px; border-radius: 6px;
   font-size: 11px; font-weight: 600;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
 }
 .reward.outline { background: transparent; color: var(--text); border: 1px solid var(--border-strong); }
+@media (prefers-color-scheme: dark) {
+  .pill.success { background: #0d2818; color: #3fb950; }
+  .pill.warn    { background: #2a1f04; color: #d29922; }
+}
 
 /* How step */
 .how-step {
@@ -434,8 +456,8 @@ pre {
   color: var(--text-3); letter-spacing: 0.04em;
   flex-shrink: 0; padding-top: 2px; width: 24px;
 }
-.how-step .ttl { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
-.how-step .ds  { font-size: 12px; color: var(--text-3); line-height: 1.5; }
+.how-step .ttl { font-size: 14px; font-weight: 600; margin-bottom: 3px; color: var(--text); }
+.how-step .ds  { font-size: 12px; color: var(--text-2); line-height: 1.5; }
 
 /* Toggle */
 .toggle {
@@ -479,7 +501,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--t
 /* Toast */
 .toast {
   position: fixed; bottom: 88px; left: 50%; transform: translateX(-50%);
-  background: var(--text); color: white;
+  background: var(--text); color: var(--bg);
   padding: 11px 18px; border-radius: 100px;
   font-size: 13px; font-weight: 500; z-index: 200;
   opacity: 0; pointer-events: none;

@@ -1168,7 +1168,7 @@ function pageSettings() {
     <h1>${t('settings.title')}</h1>
 
     <div class="card tight" style="display:flex; align-items:center; gap:12px;">
-      <div style="width:42px; height:42px; border-radius:10px; background:var(--text); color:#fff; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; flex-shrink:0; letter-spacing:0.04em;">${initial}</div>
+      <div style="width:42px; height:42px; border-radius:10px; background:var(--text); color:var(--bg); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; flex-shrink:0; letter-spacing:0.04em;">${initial}</div>
       <div style="flex:1;">
         <div style="font-weight:600; font-size:14px;">${state.user.email || shortAddr(state.user.address || '')}</div>
         <div class="muted" style="margin-top:2px;">${provider}${joined ? ' · ' + joined : ''}</div>
