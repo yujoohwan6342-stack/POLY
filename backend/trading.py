@@ -548,51 +548,93 @@ class ExecReq(BaseModel):
     order_type: str = "limit"                            # limit / market
     max_price: Optional[float] = None
     market_slug: Optional[str] = None                    # 토큰 차감 ref_id 용
+    idempotency_key: Optional[str] = None                # 중복 발주 방지 (브라우저 생성)
+    neg_risk: bool = False
+    tick_size: float = 0.01
 
 
 class ExecResp(BaseModel):
     ok: bool
     address: Optional[str] = None
     error: Optional[str] = None
+    error_code: Optional[str] = None
     tokens_left: int
     raw: Optional[dict] = None
+    idempotent_replay: bool = False
 
 
 @router.post("/execute", response_model=ExecResp)
 def execute(req: ExecReq,
             user: User = Depends(get_current_user),
             session: Session = Depends(get_session)):
-    """단일 주문 실행. PK 는 함수 끝나면 release. DB 에 거래 기록 X."""
-    if req.action not in ("buy", "sell"):
-        raise HTTPException(400, "action must be buy/sell")
-    if req.order_type not in ("limit", "market"):
-        raise HTTPException(400, "order_type must be limit/market")
+    """단일 주문 실행 — stateless.
 
-    # 매수만 토큰 차감 (1 거래 사이클 = 매수 시점 기준; 매도는 후속 액션)
+    안전장치:
+      - idempotency_key 같으면 토큰 중복차감 차단 (브라우저 재시도 안전)
+      - 매수: 토큰 차감 → 주문 실패 시 전액 환불 (rollback)
+      - PK 는 함수 끝나면 GC. DB 에 거래 기록 X.
+    """
+    if req.action not in ("buy", "sell"):
+        raise HTTPException(400, "action_invalid")
+    if req.order_type not in ("limit", "market"):
+        raise HTTPException(400, "order_type_invalid")
+
+    idem_ref = None
+    if req.idempotency_key:
+        idem_ref = f"idem:{req.idempotency_key}"
+        # 같은 키로 이미 처리된 적 있으면 무시 (토큰 차감 0회 보장)
+        existing = session.exec(
+            select(TokenTx).where(
+                TokenTx.user_id == user.id,
+                TokenTx.ref_id == idem_ref,
+            )
+        ).first()
+        if existing:
+            return ExecResp(
+                ok=True, tokens_left=user.tokens,
+                idempotent_replay=True,
+            )
+
+    # ── 매수만 사전 토큰 차감 ────────────────────────────
+    debited = False
     if req.action == "buy":
         if user.tokens < config.COST_PER_CYCLE:
             raise HTTPException(402, "insufficient_tokens")
         try:
             credit(session, user, -config.COST_PER_CYCLE, "cycle",
-                   ref_id=req.market_slug or "live", note=f"buy {req.token_id[:6]}")
+                   ref_id=idem_ref or (req.market_slug or "live"),
+                   note=f"buy {req.token_id[:6]}")
+            debited = True
         except Exception as e:
-            raise HTTPException(500, f"token_consume_failed: {e}")
+            raise HTTPException(500, f"token_consume_failed:{e}")
 
+    # ── 주문 실행 ─────────────────────────────────────────
     pk = req.private_key
     try:
         result = pmx.execute_order(
             pk, action=req.action, token_id=req.token_id,
             price=req.price, size=req.size, order_type=req.order_type,
             funder=req.funder, max_price=req.max_price,
+            neg_risk=req.neg_risk, tick_size=req.tick_size,
         )
     finally:
         pk = None
-        # FastAPI/pydantic 가 req 보유 — 응답 직후 GC. 추가 zero-out 불가능 (Python 한계)
+
+    # ── 실패 시 토큰 환불 ────────────────────────────────
+    if debited and not result.get("ok"):
+        try:
+            # 같은 idem_ref 로 +차감 만큼 환불
+            credit(session, user, config.COST_PER_CYCLE, "cycle",
+                   ref_id=(idem_ref or "live") + ":refund",
+                   note=f"refund: {(result.get('error_code') or 'failed')[:30]}")
+        except Exception as e:
+            log.warning("refund failed user=%s: %s", user.id, e)
 
     return ExecResp(
         ok=bool(result.get("ok")),
         address=result.get("address"),
         error=result.get("error"),
+        error_code=result.get("error_code"),
         tokens_left=user.tokens,
         raw=result.get("raw") if result.get("ok") else None,
     )

@@ -8,7 +8,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<link rel="stylesheet" href="/static/styles.css?v=20260510g" />
+<link rel="stylesheet" href="/static/styles.css?v=20260510h" />
 <script type="module">
   // Firebase SDK loader (config는 /api/config에서 받아 동적 init)
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
@@ -25,19 +25,9 @@
 <body>
   <div class="app">
     <header class="app-header">
-      <a href="/" class="brand" aria-label="STREAK home">
-        <svg class="brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-          <defs>
-            <linearGradient id="bg1" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stop-color="#3182f6"/>
-              <stop offset="1" stop-color="#1b64da"/>
-            </linearGradient>
-          </defs>
-          <rect width="32" height="32" rx="8" fill="url(#bg1)"/>
-          <path d="M9 21 L14 13 L18 18 L23 10" stroke="white" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-          <circle cx="23" cy="10" r="2" fill="white"/>
-        </svg>
-        <span class="brand-word">STREAK</span>
+      <a href="/" class="logo" aria-label="STREAK home">
+        <span class="mark"></span>
+        <span class="word">STREAK</span>
       </a>
       <div class="lang-switch" id="lang-switch">
         <button data-lang="en">EN</button>
@@ -74,6 +64,6 @@
     <div class="toast" id="toast"></div>
   </div>
 
-<script src="/static/app.js?v=20260510g"></script>
+<script src="/static/app.js?v=20260510h"></script>
 </body>
 </html>

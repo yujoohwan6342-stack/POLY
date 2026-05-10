@@ -137,53 +137,138 @@ def get_address_balance(pk: str, funder: Optional[str] = None) -> dict:
     # PK 는 함수 끝나면 GC
 
 
+def _classify_error(msg: str) -> str:
+    """폴리마켓 에러 메시지 → 사용자 친화 코드."""
+    m = (msg or "").lower()
+    if "insufficient" in m and ("balance" in m or "fund" in m): return "insufficient_balance"
+    if "allowance" in m: return "allowance_required"
+    if "min order" in m or "minimum" in m: return "below_min_order"
+    if "tick" in m: return "invalid_tick_size"
+    if "neg risk" in m or "neg_risk" in m: return "neg_risk_mismatch"
+    if "rejected" in m or "not enough liquidity" in m: return "no_liquidity"
+    if "timeout" in m or "deadline" in m: return "timeout"
+    if "nonce" in m: return "nonce_error"
+    if "signature" in m: return "signature_error"
+    return "order_failed"
+
+
 def execute_order(pk: str, *, action: str, token_id: str, price: float,
                   size: float, order_type: str = "limit",
                   funder: Optional[str] = None,
-                  max_price: Optional[float] = None) -> dict:
+                  max_price: Optional[float] = None,
+                  neg_risk: bool = False,
+                  tick_size: float = 0.01,
+                  preflight: bool = True) -> dict:
     """단일 주문 실행. action='buy'|'sell', order_type='limit'|'market'.
 
-    Returns: {ok, order_id?, status?, error?}
+    안전장치:
+      - preflight=True: 발주 전 잔액/allowance 사전 검증 → 무의미한 실패 차단
+      - tick_size 정렬 (0.01 또는 0.001 단위)
+      - price 0.01~0.99 클램프 (Polymarket은 1.0/0.0 거부)
+      - 1회 retry on transient errors (timeout, nonce)
+
+    Returns: {ok, order_id?, error?, error_code?, address}
     PK 는 응답에 절대 포함되지 않는다.
     """
     from eth_account import Account
     from py_clob_client_v2.clob_types import (
-        OrderArgs, MarketOrderArgs, OrderType
+        OrderArgs, MarketOrderArgs, OrderType, BalanceAllowanceParams, AssetType
     )
     from py_clob_client_v2.order_builder.constants import BUY, SELL
 
     pk_in = pk if pk.startswith("0x") else "0x" + pk
     try:
         addr = Account.from_key(pk_in).address
-    except Exception as e:
-        return {"ok": False, "error": "invalid_pk"}
+    except Exception:
+        return {"ok": False, "error": "invalid_pk", "error_code": "invalid_pk", "address": None}
+
+    # 가격 클램프 + tick 정렬
+    if tick_size <= 0: tick_size = 0.01
+    price = max(0.01, min(0.99, round(price / tick_size) * tick_size))
+    price = round(price, 4)
+    if max_price is not None:
+        max_price = max(0.01, min(0.99, round(max_price / tick_size) * tick_size))
+        max_price = round(max_price, 4)
+
+    # 사이즈 가드
+    if size < 5.0 and action == "buy":
+        # Polymarket 최소 5 shares 또는 $1 — 작은 주문은 거부됨
+        return {"ok": False, "error": "size_too_small", "error_code": "below_min_order", "address": addr}
 
     side_const = BUY if action == "buy" else SELL
 
     try:
-        client, _ = _make_client(pk_in, funder)
-        if order_type == "market":
-            args = MarketOrderArgs(
-                token_id=token_id,
-                amount=round(size if action == "buy" else size * price, 2),
-                side=side_const,
-                price=round(max_price or price, 2),
-            )
-            signed = client.create_market_order(args)
-            resp = client.post_order(signed, OrderType.FOK)
-        else:
-            args = OrderArgs(
-                token_id=token_id, price=round(price, 2),
-                size=round(size, 2), side=side_const,
-            )
-            signed = client.create_order(args)
-            resp = client.post_order(signed, OrderType.GTC)
-        log.info("ORDER addr=%s %s token=%s..%s px=%.2f size=%.2f resp_keys=%s",
-                 _redact(addr), action, token_id[:6], token_id[-4:],
-                 price, size, list(resp.keys()) if isinstance(resp, dict) else type(resp))
-        return {"ok": True, "address": addr, "raw": resp}
+        client, sig_type = _make_client(pk_in, funder)
+
+        # ── Pre-flight: 잔액 + allowance 확인 ─────────────────
+        if preflight and action == "buy":
+            try:
+                bal = client.get_balance_allowance(
+                    BalanceAllowanceParams(asset_type=AssetType.COLLATERAL, signature_type=sig_type)
+                )
+                balance_usd = float(bal.get("balance", 0)) / 1e6
+                allowance_usd = float(bal.get("allowance", 0)) / 1e6
+                needed = round(price * size, 2)
+                if balance_usd < needed:
+                    return {"ok": False, "error_code": "insufficient_balance",
+                            "error": f"need ${needed:.2f}, have ${balance_usd:.2f}",
+                            "address": addr, "balance": balance_usd}
+                if allowance_usd < needed:
+                    return {"ok": False, "error_code": "allowance_required",
+                            "error": f"approve Polymarket allowance for at least ${needed:.2f} on app.polymarket.com",
+                            "address": addr, "allowance": allowance_usd}
+            except Exception as e:
+                log.warning("preflight balance check failed addr=%s: %s", _redact(addr), e)
+                # 사전체크 실패해도 발주는 시도 (네트워크 일시 오류 가능)
+
+        # ── 주문 발주 (1회 retry) ─────────────────────────────
+        last_err = None
+        for attempt in range(2):
+            try:
+                if order_type == "market":
+                    args = MarketOrderArgs(
+                        token_id=token_id,
+                        amount=round(size * price, 2) if action == "buy" else round(size, 2),
+                        side=side_const,
+                        price=round(max_price if max_price is not None else price, 4),
+                    )
+                    signed = client.create_market_order(args)
+                    resp = client.post_order(signed, OrderType.FOK)
+                else:
+                    args = OrderArgs(
+                        token_id=token_id, price=round(price, 4),
+                        size=round(size, 2), side=side_const,
+                    )
+                    signed = client.create_order(args)
+                    resp = client.post_order(signed, OrderType.GTC)
+                log.info("ORDER addr=%s %s token=%s..%s px=%.4f size=%.2f attempt=%d resp_keys=%s",
+                         _redact(addr), action, token_id[:6], token_id[-4:],
+                         price, size, attempt + 1,
+                         list(resp.keys()) if isinstance(resp, dict) else type(resp).__name__)
+
+                # 응답 검증 — Polymarket 은 success+errorMsg 패턴 가능
+                if isinstance(resp, dict):
+                    err_msg = resp.get("errorMsg") or resp.get("error_msg") or resp.get("error")
+                    if err_msg:
+                        ec = _classify_error(err_msg)
+                        if ec in ("timeout", "nonce_error") and attempt == 0:
+                            last_err = err_msg
+                            continue
+                        return {"ok": False, "error": str(err_msg)[:200],
+                                "error_code": ec, "address": addr, "raw": resp}
+                return {"ok": True, "address": addr, "raw": resp}
+            except Exception as e:
+                msg = str(e)[:300]
+                ec = _classify_error(msg)
+                if ec in ("timeout", "nonce_error") and attempt == 0:
+                    last_err = msg
+                    continue
+                log.warning("order fail addr=%s action=%s code=%s err=%s",
+                            _redact(addr), action, ec, msg[:200])
+                return {"ok": False, "error": msg[:200], "error_code": ec, "address": addr}
+        return {"ok": False, "error": last_err or "unknown", "error_code": "order_failed", "address": addr}
     except Exception as e:
-        # 절대 PK 노출 X — addr 만
-        log.warning("order fail addr=%s action=%s err=%s", _redact(addr), action, str(e)[:200])
-        return {"ok": False, "error": str(e)[:200], "address": addr}
+        log.warning("client init fail addr=%s err=%s", _redact(addr), str(e)[:200])
+        return {"ok": False, "error": str(e)[:200],
+                "error_code": _classify_error(str(e)), "address": addr}
     # 함수 종료 시 client, signed, args 모두 GC

@@ -159,61 +159,99 @@ function copy(text, msg) { navigator.clipboard.writeText(text); showToast(msg ||
 async function pageHome() {
   const main = document.getElementById('main');
   const isAnon = state.user.auth_method === 'anonymous';
+  const today = new Date();
+  const dateStr = today.toLocaleDateString(state.lang === 'ko' ? 'ko-KR' : state.lang === 'zh' ? 'zh-CN' : 'en-US',
+    { year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'long' });
+
   main.innerHTML = `
-    <section>
-      <div class="card hero">
-        <div class="label">${t('home.balance_label')}</div>
-        <div class="value">${state.user.tokens.toLocaleString()}</div>
-        <div class="sub">${t('home.cycles_left', { n: state.user.tokens })}</div>
+    <div class="row between" style="margin-bottom:16px;">
+      <div>
+        <div class="eyebrow">${dateStr}</div>
+        <h1 style="margin-top:4px; margin-bottom:0;">${t('home.greeting')}</h1>
       </div>
-    </section>
+    </div>
+
+    <div class="card hero">
+      <div class="grid-line"></div>
+      <div class="accent-block"></div>
+      <div style="position:relative;">
+        <div class="label">${t('home.balance_label')}</div>
+        <div class="value lg">${state.user.tokens.toLocaleString()}</div>
+        <div class="sub">${t('home.cycles_left', { n: state.user.tokens })}</div>
+        <div class="row" style="margin-top:18px; gap:8px;">
+          <button class="btn white" id="btn-go-trading-2" style="flex:1; padding:11px 14px; font-size:13px;">${t('home.go_trading')}</button>
+          <button class="btn outline" id="btn-invite-2" style="flex:1; padding:11px 14px; font-size:13px; background:transparent; color:#fff; border-color:rgba(255,255,255,0.2);">${t('home.invite')}</button>
+        </div>
+      </div>
+    </div>
+
     ${isAnon ? `
-      <section class="card" style="border-left: 3px solid var(--primary);">
-        <h3>🎁 ${t('home.upgrade_title')}</h3>
-        <p>${t('home.upgrade_desc', { tokens: state.config.upgrade_bonus })}</p>
-        <button class="btn" id="btn-upgrade">${t('home.upgrade_cta')}</button>
-      </section>
+      <div class="nudge">
+        <div class="row between" style="align-items:flex-start;">
+          <div style="flex:1;">
+            <h3 style="margin:0;">${t('home.upgrade_title')}</h3>
+            <p style="margin-top:4px;">${t('home.upgrade_desc', { tokens: state.config.upgrade_bonus })}</p>
+          </div>
+          <span class="reward outline">+${state.config.upgrade_bonus}</span>
+        </div>
+        <button class="btn" id="btn-upgrade" style="margin-top:12px; padding:10px 14px; font-size:13px;">${t('home.upgrade_cta')}</button>
+      </div>
     ` : ''}
-    <section class="grid-2">
-      <button class="btn ghost" id="btn-go-trading">📈 ${t('nav.trading')}</button>
-      <button class="btn ghost" id="btn-invite">🎁 ${t('home.invite')}</button>
-    </section>
   `;
   if (isAnon) document.getElementById('btn-upgrade').onclick = signInGoogle;
-  document.getElementById('btn-invite').onclick = () => navigate('referrals');
-  document.getElementById('btn-go-trading').onclick = () => navigate('trading');
+  document.getElementById('btn-invite-2').onclick = () => navigate('referrals');
+  document.getElementById('btn-go-trading-2').onclick = () => navigate('trading');
 }
 
 async function pageWallet() {
   const main = document.getElementById('main');
+  const provider = state.user.auth_method === 'google' || state.user.auth_method === 'upgraded' ? 'Google' :
+                   state.user.auth_method === 'anonymous' ? 'Guest' : state.user.auth_method;
   main.innerHTML = `
     <h1>${t('wallet.title')}</h1>
-    <section class="card hero">
-      <div class="label">${t('wallet.balance')}</div>
-      <div class="value">${state.user.tokens.toLocaleString()} <span style="font-size:14px; opacity:0.8;">${t('wallet.balance_unit')}</span></div>
-      <div class="sub">${t('wallet.balance_hint')}</div>
-    </section>
-    <section class="card">
-      <div class="label">${t('wallet.your_address')}</div>
-      <div class="row between">
-        <span class="addr-pill">${state.user.email || shortAddr(state.user.address)}</span>
-        <span style="font-size:11px; color:var(--text-3);">${state.user.auth_method}</span>
+
+    <div class="card hero">
+      <div class="grid-line"></div>
+      <div class="accent-block"></div>
+      <div style="position:relative;">
+        <div class="label">${t('wallet.balance')}</div>
+        <div class="value lg">${state.user.tokens.toLocaleString()}</div>
+        <div class="sub">${t('wallet.balance_hint')}</div>
       </div>
-    </section>
-    <h2 style="margin-top:24px;">${t('wallet.earn_title')}</h2>
-    <section class="card">
-      <h3 style="color:var(--text);">🎁 ${t('wallet.earn_invite')}</h3>
-      <p>${t('wallet.earn_invite_desc', { tokens: state.config.ref_l1 })}</p>
-      <button class="btn ghost" id="btn-go-ref">→ ${t('referrals.title')}</button>
-    </section>
-    <section class="card">
-      <h3 style="color:var(--text);">📺 ${t('wallet.earn_ads')}</h3>
-      <p style="color:var(--text-3);">${t('wallet.earn_ads_desc')}</p>
-    </section>
-    <section class="card">
-      <h2>${t('wallet.history')}</h2>
-      <div id="tx-list" class="tx-list"><div class="empty">${t('common.loading')}</div></div>
-    </section>
+    </div>
+
+    <div class="card tight" style="display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <div class="label">${t('wallet.your_address')}</div>
+        <div style="font-weight:600; font-size:14px; margin-top:2px;">${state.user.email || shortAddr(state.user.address || '')}</div>
+      </div>
+      <span class="pill">${provider}</span>
+    </div>
+
+    <h2>${t('wallet.earn_title')}</h2>
+    <div class="card tight">
+      <div class="row between">
+        <div>
+          <div style="font-weight:600; font-size:14px;">${t('wallet.earn_invite')}</div>
+          <div class="muted" style="margin-top:3px;">${t('wallet.earn_invite_desc', { tokens: state.config.ref_l1 })}</div>
+        </div>
+        <button class="btn sm" id="btn-go-ref">${t('wallet.earn_invite_cta')}</button>
+      </div>
+    </div>
+    <div class="card tight" style="opacity:0.55;">
+      <div class="row between">
+        <div>
+          <div style="font-weight:600; font-size:14px;">${t('wallet.earn_ads')}</div>
+          <div class="muted" style="margin-top:3px;">${t('wallet.earn_ads_desc')}</div>
+        </div>
+        <span class="pill outline">${t('wallet.earn_ads_pill')}</span>
+      </div>
+    </div>
+
+    <h2>${t('wallet.history')}</h2>
+    <div class="card tight">
+      <div id="tx-list" class="list"><div class="empty">${t('common.loading')}</div></div>
+    </div>
   `;
   document.getElementById('btn-go-ref').onclick = () => navigate('referrals');
   const list = document.getElementById('tx-list');
@@ -225,10 +263,24 @@ async function pageWallet() {
       list.innerHTML = rows.map(tx => {
         const cls = tx.delta > 0 ? 'pos' : 'neg';
         const sign = tx.delta > 0 ? '+' : '';
-        const ts = new Date(tx.created_at).toLocaleString();
-        return `<div class="tx-item">
-          <div><div>${tx.kind}</div><div class="meta">${ts}${tx.note ? ' · ' + tx.note : ''}</div></div>
-          <div class="tx-amount ${cls}">${sign}${tx.delta}</div>
+        const ts = new Date(tx.created_at).toLocaleString(state.lang === 'ko' ? 'ko-KR' : 'en-US');
+        const labelMap = {
+          signup_anon: t('wallet.history') + ' · signup',
+          signup_google: t('wallet.history') + ' · Google',
+          upgrade: 'Google upgrade',
+          ref_l1: t('referrals.l1_label'),
+          ref_l2: t('referrals.l2_label'),
+          referred: t('referrals.title'),
+          cycle: 'Trade',
+          ad: 'Ad',
+        };
+        const label = labelMap[tx.kind] || tx.kind;
+        return `<div class="list-row">
+          <div>
+            <div style="font-weight:600; font-size:13px;">${label}</div>
+            <div class="meta">${ts}${tx.note ? ' · ' + tx.note : ''}</div>
+          </div>
+          <div class="amount ${cls} mono">${sign}${tx.delta}</div>
         </div>`;
       }).join('');
     }
@@ -244,51 +296,124 @@ function renderTree(node, depth = 0) {
   return out;
 }
 
+function renderRefTree(node, depth = 0) {
+  if (!node) return '';
+  if (depth === 0) {
+    let out = `<div class="tree-line"><span class="avatar me">ME</span><span style="font-weight:600; color:var(--text);" class="id">${node.referral_code || ''}</span></div>`;
+    for (const c of (node.children || [])) out += renderRefTree(c, 1);
+    return out;
+  }
+  const tag = node.auth_method === 'google' ? 'G' : node.auth_method === 'upgraded' ? '★' : 'A';
+  const reward = depth === 1 ? `<span class="reward">+${state.config.ref_l1}</span>` : `<span class="reward outline">+${state.config.ref_l2}</span>`;
+  const dateStr = node.joined ? new Date(node.joined).toLocaleDateString(state.lang === 'ko' ? 'ko-KR' : 'en-US', { month: 'short', day: 'numeric' }) : '';
+  let out = `<div class="tree-line depth-${depth}">
+    <span class="branch">└</span>
+    <span class="avatar">${tag}</span>
+    <span class="id">${node.short || ''}</span>
+    <span class="muted" style="margin-left:auto; margin-right:8px;">${dateStr}</span>
+    ${reward}
+  </div>`;
+  for (const c of (node.children || [])) out += renderRefTree(c, depth + 1);
+  return out;
+}
+
 async function pageReferrals() {
   const main = document.getElementById('main');
+  const canEnterCode = !state.user.referred_by_id;
   main.innerHTML = `
     <h1>${t('referrals.title')}</h1>
-    <section class="card">
-      <div class="label">${t('referrals.your_code')}</div>
-      <div class="row between" style="margin-top:6px;">
-        <div class="value sm">${state.user.referral_code}</div>
-        <button class="btn sm ghost" id="btn-copy-code">${t('wallet.copy')}</button>
+
+    <div class="card hero">
+      <div class="grid-line"></div>
+      <div style="position:relative;">
+        <div class="label">${t('referrals.your_code')}</div>
+        <div style="font-size:32px; font-weight:700; letter-spacing:0.06em; margin:6px 0 4px; font-family:'JetBrains Mono','SF Mono', monospace;">${state.user.referral_code}</div>
+        <div class="sub">${t('referrals.code_hint')}</div>
+        <button class="btn white" id="btn-copy-link" style="margin-top:16px;">${t('referrals.copy_link')}</button>
       </div>
-    </section>
-    <section class="card">
-      <div class="label">${t('referrals.your_link')}</div>
-      <code id="invite-link" style="display:block;margin:6px 0;font-size:11px;word-break:break-all;"></code>
-      <button class="btn" id="btn-copy-link">${t('referrals.copy_link')}</button>
-    </section>
-    <section class="card">
-      <h3 style="color:var(--text);">${t('referrals.earn_l1', { tokens: state.config.ref_l1 })}</h3>
-      <h3 style="color:var(--text);">${t('referrals.earn_l2', { tokens: state.config.ref_l2 })}</h3>
-    </section>
-    <section class="grid-2">
-      <div class="card"><div class="label">${t('referrals.stats_direct')}</div><div class="value sm" id="stat-direct">—</div></div>
-      <div class="card"><div class="label">${t('referrals.stats_indirect')}</div><div class="value sm" id="stat-indirect">—</div></div>
-    </section>
-    <section class="card">
+    </div>
+
+    ${canEnterCode ? `
+      <div class="nudge">
+        <h3 style="margin:0 0 6px;">${t('referrals.enter_code', { tokens: state.config.referred_bonus })}</h3>
+        <div class="row" style="gap:6px; margin-top:8px;">
+          <input id="ref-code-in" type="text" placeholder="${t('referrals.code_input_ph')}" style="flex:1; font-family:'JetBrains Mono', monospace; text-transform:uppercase;" />
+          <button class="btn sm" id="ref-code-apply">${t('referrals.code_apply')}</button>
+        </div>
+      </div>
+    ` : ''}
+
+    <h2>${t('referrals.rewards_title')}</h2>
+    <div class="card tight" style="display:flex; align-items:center; gap:14px;">
+      <div class="tag-num solid">L1</div>
+      <div style="flex:1;">
+        <div style="font-weight:600; font-size:14px;">${t('referrals.l1_label')}</div>
+        <div class="muted" style="margin-top:2px;">${t('referrals.l1_desc')}</div>
+      </div>
+      <span class="reward">+${state.config.ref_l1}</span>
+    </div>
+    <div class="card tight" style="display:flex; align-items:center; gap:14px;">
+      <div class="tag-num">L2</div>
+      <div style="flex:1;">
+        <div style="font-weight:600; font-size:14px;">${t('referrals.l2_label')}</div>
+        <div class="muted" style="margin-top:2px;">${t('referrals.l2_desc')}</div>
+      </div>
+      <span class="reward outline">+${state.config.ref_l2}</span>
+    </div>
+
+    <h2>${t('referrals.stats_title')}</h2>
+    <div class="grid-2">
+      <div class="stat-tile">
+        <div class="label">${t('referrals.stats_direct')}</div>
+        <div class="value sm mono" id="stat-direct">—<span style="font-size:12px; color:var(--text-3); font-family:inherit; font-weight:500;"> ${t('referrals.stats_unit_person')}</span></div>
+      </div>
+      <div class="stat-tile">
+        <div class="label">${t('referrals.stats_indirect')}</div>
+        <div class="value sm mono" id="stat-indirect">—<span style="font-size:12px; color:var(--text-3); font-family:inherit; font-weight:500;"> ${t('referrals.stats_unit_person')}</span></div>
+      </div>
+    </div>
+    <div class="stat-tile" style="margin-top:8px;">
       <div class="label">${t('referrals.stats_earned')}</div>
-      <div class="value sm" id="stat-earned">—</div>
-    </section>
-    <section class="card">
-      <h2>${t('referrals.tree_title')}</h2>
-      <div id="tree-area"></div>
-    </section>
+      <div class="value sm mono text-pos" id="stat-earned">—</div>
+    </div>
+
+    <h2>${t('referrals.tree_title')}</h2>
+    <div class="card tight" id="tree-area">
+      <div class="empty">${t('common.loading')}</div>
+    </div>
   `;
-  const stats = await api('/api/referrals/stats');
-  document.getElementById('invite-link').textContent = stats.invite_url;
-  document.getElementById('stat-direct').textContent = stats.direct_count;
-  document.getElementById('stat-indirect').textContent = stats.indirect_count;
-  document.getElementById('stat-earned').textContent = stats.tokens_earned + ' ' + t('common.tokens');
-  document.getElementById('btn-copy-code').onclick = () => copy(state.user.referral_code);
+
+  const stats = await api('/api/referrals/stats').catch(() => ({direct_count:0, indirect_count:0, tokens_earned:0, invite_url: location.origin + '?ref=' + state.user.referral_code}));
+  document.getElementById('stat-direct').firstChild.textContent = stats.direct_count;
+  document.getElementById('stat-indirect').firstChild.textContent = stats.indirect_count;
+  document.getElementById('stat-earned').textContent = '+' + stats.tokens_earned;
   document.getElementById('btn-copy-link').onclick = () => copy(stats.invite_url);
-  const tree = await api('/api/referrals/tree');
-  const area = document.getElementById('tree-area');
-  area.innerHTML = (tree.children?.length)
-    ? `<div class="tree">${renderTree(tree)}</div>`
-    : `<div class="empty">${t('referrals.no_referrals')}</div>`;
+
+  if (canEnterCode) {
+    const inEl = document.getElementById('ref-code-in');
+    document.getElementById('ref-code-apply').onclick = async () => {
+      const code = (inEl.value || '').trim().toUpperCase();
+      if (!code) return;
+      try {
+        const r = await api('/api/referrals/apply_code', {
+          method: 'POST', body: JSON.stringify({ code }),
+        });
+        showToast('✓ ' + t('referrals.code_applied'));
+        if (r.tokens) state.user.tokens = r.tokens;
+        pageReferrals();
+      } catch (e) {
+        showToast(e.status === 404 || e.status === 400 ? t('referrals.code_invalid') : (e.body || e.message));
+      }
+    };
+  }
+
+  try {
+    const tree = await api('/api/referrals/tree');
+    const area = document.getElementById('tree-area');
+    area.innerHTML = (tree.children?.length)
+      ? renderRefTree(tree)
+      : `<div class="empty">${t('referrals.no_referrals')}</div>`;
+  } catch {}
 }
 
 // ─── Disclaimer / Safety ─────────────────────────────────────────
@@ -418,95 +543,131 @@ function shouldExitJS(pos, cfg, mkt) {
 }
 
 async function liveTick(cfg) {
-  const pk = pkGet();
-  if (!pk) { liveStop(); return; }
-  // 1) 마켓 데이터
-  let mkt;
-  try { mkt = await api(`/api/trading/market_data?asset=${cfg.asset}&duration_min=${cfg.duration_min}`); }
-  catch { return; }
-  if (!mkt.available) return;
-  LIVE.market = mkt;
+  if (LIVE._tickInflight) return;       // 중복 틱 방지
+  LIVE._tickInflight = true;
+  try {
+    const pk = pkGet();
+    if (!pk) { liveStop(); return; }
+    // 1) 마켓 데이터
+    let mkt;
+    try { mkt = await api(`/api/trading/market_data?asset=${cfg.asset}&duration_min=${cfg.duration_min}`); }
+    catch { return; }
+    if (!mkt.available) return;
+    LIVE.market = mkt;
 
-  // 2) 청산 체크 (현재 마켓에 우리 포지션 있으면)
-  for (const pos of [...LIVE.positions]) {
-    if (pos.market_slug !== mkt.market.slug) continue;
-    const ex = shouldExitJS(pos, cfg, mkt);
-    if (!ex) continue;
-    try {
-      const r = await api('/api/trading/execute', {
-        method: 'POST',
-        body: JSON.stringify({
-          private_key: pk, funder: funderGet() || null,
-          action: 'sell', token_id: pos.token_id,
-          price: ex.price, size: pos.size,
-          order_type: cfg.sell_order_type,
-          market_slug: mkt.market.slug,
-        }),
-      });
-      pos.exit_price = ex.price;
-      pos.exit_reason = ex.reason;
-      pos.closed_at = new Date().toISOString();
-      pos.pnl = (ex.price - pos.entry_price) * pos.size;
-      LIVE.trades.push({ ...pos, kind:'sell', ok:r.ok, error:r.error });
-      LIVE.positions = LIVE.positions.filter(p => p.id !== pos.id);
-      tradesSave();
-    } catch (e) { console.error('sell err', e); }
-  }
+    // 2) 청산 체크 (현재 마켓에 우리 포지션 있으면)
+    for (const pos of [...LIVE.positions]) {
+      if (pos.market_slug !== mkt.market.slug) continue;
+      if (pos._sellInflight) continue;
+      const ex = shouldExitJS(pos, cfg, mkt);
+      if (!ex) continue;
+      pos._sellInflight = true;
+      const idem = `sell-${pos.id}-${Math.round(ex.price*100)}-${ex.reason}`;
+      try {
+        const r = await api('/api/trading/execute', {
+          method: 'POST',
+          body: JSON.stringify({
+            private_key: pk, funder: funderGet() || null,
+            action: 'sell', token_id: pos.token_id,
+            price: ex.price, size: pos.size,
+            order_type: cfg.sell_order_type,
+            market_slug: mkt.market.slug,
+            idempotency_key: idem,
+            tick_size: mkt.market.tick_size || 0.01,
+            neg_risk: !!mkt.market.neg_risk,
+          }),
+        });
+        if (r.ok) {
+          pos.exit_price = ex.price;
+          pos.exit_reason = ex.reason;
+          pos.closed_at = new Date().toISOString();
+          pos.pnl = (ex.price - pos.entry_price) * pos.size;
+          LIVE.trades.push({ ...pos, kind:'sell', ok:true });
+          LIVE.positions = LIVE.positions.filter(p => p.id !== pos.id);
+        } else {
+          // 매도 실패 → 포지션 유지, 다음 틱 재시도
+          LIVE.trades.push({ kind:'sell', ok:false,
+            error: r.error, error_code: r.error_code,
+            market_slug: mkt.market.slug, side: pos.side,
+            opened_at: new Date().toISOString() });
+          delete pos._sellInflight;
+        }
+        tradesSave();
+      } catch (e) {
+        console.error('sell err', e);
+        delete pos._sellInflight;
+      }
+    }
 
-  // 3) 진입 체크 (이미 이 마켓에 포지션 없을 때만)
-  const hasInMkt = LIVE.positions.some(p => p.market_slug === mkt.market.slug);
-  if (!hasInMkt) {
-    const dec = shouldEnterJS(cfg, mkt);
-    if (dec) {
-      // limit 모드: 호가가 entry_price 닿아야 fill 가능
-      const ya = mkt.yes_book.best_ask, na = mkt.no_book.best_ask;
-      const ask = dec.side === 'YES' ? ya : na;
-      if (cfg.buy_order_type === 'limit' && ask > dec.price + 0.001) {
-        // 아직 도달 안함 — pass
-      } else {
-        const fillPx = cfg.buy_order_type === 'market' ? ask : dec.price;
-        const sz = cfg.bet_size_usd / Math.max(0.01, fillPx);
-        try {
-          const r = await api('/api/trading/execute', {
-            method: 'POST',
-            body: JSON.stringify({
-              private_key: pk, funder: funderGet() || null,
-              action: 'buy', token_id: dec.token_id,
-              price: fillPx, size: parseFloat(sz.toFixed(2)),
-              order_type: cfg.buy_order_type,
-              market_slug: mkt.market.slug,
-              max_price: cfg.buy_order_type === 'market' ? Math.min(0.99, fillPx + 0.02) : null,
-            }),
-          });
-          if (r.ok) {
-            const pos = {
-              id: 'p_' + Date.now(),
-              market_slug: mkt.market.slug,
-              market_label: `${cfg.asset} ${cfg.duration_min}m ${dec.side}`,
-              side: dec.side, token_id: dec.token_id,
-              entry_price: fillPx, size: parseFloat(sz.toFixed(2)),
-              opened_at: new Date().toISOString(),
-              tokens_left: r.tokens_left, address: r.address,
-            };
-            LIVE.positions.push(pos);
-            LIVE.trades.push({ ...pos, kind:'buy', ok:true });
-            tradesSave();
-            // 토큰 잔액 갱신
-            if (state.user) state.user.tokens = r.tokens_left;
-          } else {
-            LIVE.trades.push({ kind:'buy', ok:false, error:r.error,
-              market_slug: mkt.market.slug, opened_at:new Date().toISOString() });
-            tradesSave();
-            if (state.user) state.user.tokens = r.tokens_left;
-            if (r.error && r.error.includes('insufficient')) liveStop();
+    // 3) 진입 체크 (이미 이 마켓에 포지션 없을 때만)
+    const hasInMkt = LIVE.positions.some(p => p.market_slug === mkt.market.slug);
+    if (!hasInMkt && !LIVE._buyInflight) {
+      const dec = shouldEnterJS(cfg, mkt);
+      if (dec) {
+        const ya = mkt.yes_book.best_ask, na = mkt.no_book.best_ask;
+        const ask = dec.side === 'YES' ? ya : na;
+        if (cfg.buy_order_type === 'limit' && ask > dec.price + 0.001) {
+          // 호가 미도달 — 다음 틱
+        } else {
+          const fillPx = cfg.buy_order_type === 'market' ? ask : dec.price;
+          const sz = Math.max(5.0, Math.round(cfg.bet_size_usd / Math.max(0.01, fillPx) * 100) / 100);
+          const idem = `buy-${mkt.market.slug}-${dec.side}-${Math.round(fillPx*100)}`;
+          LIVE._buyInflight = true;
+          try {
+            const r = await api('/api/trading/execute', {
+              method: 'POST',
+              body: JSON.stringify({
+                private_key: pk, funder: funderGet() || null,
+                action: 'buy', token_id: dec.token_id,
+                price: fillPx, size: sz,
+                order_type: cfg.buy_order_type,
+                market_slug: mkt.market.slug,
+                max_price: cfg.buy_order_type === 'market' ? Math.min(0.99, fillPx + 0.02) : null,
+                idempotency_key: idem,
+                tick_size: mkt.market.tick_size || 0.01,
+                neg_risk: !!mkt.market.neg_risk,
+              }),
+            });
+            if (r.ok && !r.idempotent_replay) {
+              const pos = {
+                id: 'p_' + Date.now(),
+                market_slug: mkt.market.slug,
+                market_label: `${cfg.asset} ${cfg.duration_min}m ${dec.side}`,
+                side: dec.side, token_id: dec.token_id,
+                entry_price: fillPx, size: sz,
+                opened_at: new Date().toISOString(),
+                tokens_left: r.tokens_left, address: r.address,
+              };
+              LIVE.positions.push(pos);
+              LIVE.trades.push({ ...pos, kind:'buy', ok:true });
+              tradesSave();
+              if (state.user) state.user.tokens = r.tokens_left;
+            } else if (!r.ok) {
+              LIVE.trades.push({ kind:'buy', ok:false,
+                error: r.error, error_code: r.error_code,
+                market_slug: mkt.market.slug, side: dec.side,
+                opened_at: new Date().toISOString() });
+              tradesSave();
+              if (state.user) state.user.tokens = r.tokens_left;
+              // 치명적 에러는 봇 자동 정지
+              if (['insufficient_balance','allowance_required','invalid_pk','signature_error']
+                    .includes(r.error_code)) {
+                liveStop();
+                showToast(r.error_code);
+              }
+            }
+            if (state.page === 'trading') pageTrading();
+          } catch (e) {
+            console.error('buy err', e);
+            if (e.status === 402) { liveStop(); showToast(t('trading.need_tokens')); }
+          } finally {
+            LIVE._buyInflight = false;
           }
-          if (state.page === 'trading') pageTrading();
-        } catch (e) {
-          console.error('buy err', e);
-          if (e.status === 402) { liveStop(); showToast(t('trading.need_tokens')); }
         }
       }
     }
+  } finally {
+    LIVE._tickInflight = false;
   }
 }
 
@@ -999,48 +1160,72 @@ async function pageTrading() {
 function pageSettings() {
   const main = document.getElementById('main');
   const isAnon = state.user.auth_method === 'anonymous';
+  const initial = (state.user.email || 'U').slice(0, 1).toUpperCase();
+  const joined = state.user.created_at ? new Date(state.user.created_at).toLocaleDateString(state.lang==='ko'?'ko-KR':'en-US') : '';
+  const provider = state.user.auth_method === 'google' || state.user.auth_method === 'upgraded' ? 'Google' : 'Guest';
+
   main.innerHTML = `
     <h1>${t('settings.title')}</h1>
-    ${isAnon ? `
-      <section class="card" style="border-left: 3px solid var(--primary);">
-        <h3>🎁 ${t('home.upgrade_title')}</h3>
-        <p>${t('home.upgrade_desc', { tokens: state.config.upgrade_bonus })}</p>
-        <button class="btn" id="btn-upgrade-set">${t('home.upgrade_cta')}</button>
-      </section>
-    ` : ''}
-    <section class="card">
-      <div class="label">${t('settings.language')}</div>
-      <div class="row" style="margin-top:8px; gap:8px;">
-        ${['en','ko','zh'].map(l => `<button class="btn sm ${state.lang===l?'':'ghost'}" data-lang="${l}">${l.toUpperCase()}</button>`).join('')}
+
+    <div class="card tight" style="display:flex; align-items:center; gap:12px;">
+      <div style="width:42px; height:42px; border-radius:10px; background:var(--text); color:#fff; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; flex-shrink:0; letter-spacing:0.04em;">${initial}</div>
+      <div style="flex:1;">
+        <div style="font-weight:600; font-size:14px;">${state.user.email || shortAddr(state.user.address || '')}</div>
+        <div class="muted" style="margin-top:2px;">${provider}${joined ? ' · ' + joined : ''}</div>
       </div>
-    </section>
-    <section class="card">
-      <h3 style="margin:0 0 8px;">🔒 ${t('safety.badge')}</h3>
-      <p style="font-size:13px; color:var(--text-2); margin:0 0 8px;">${t('safety.subtitle')}</p>
-      <ul style="margin:0 0 12px; padding-left:18px; font-size:12px; color:var(--text-2); line-height:1.6;">
-        <li>${t('safety.p1_title')}</li>
-        <li>${t('safety.p2_title')}</li>
-        <li>${t('safety.p4_title')}</li>
-      </ul>
-      <a href="https://github.com/yujoohwan6342-stack/POLY" target="_blank" rel="noopener" style="font-size:13px;">${t('safety.view_source')} →</a>
-    </section>
-    <section class="card">
-      <h3 style="margin:0 0 6px;">⚠ ${t('disclaimer.title')}</h3>
-      <p style="font-size:13px; color:var(--text-2); margin:0 0 10px;">${t('disclaimer.short')}</p>
-      <button class="btn ghost sm" id="btn-set-disc">${t('disclaimer.full_title')} →</button>
-    </section>
+    </div>
 
-    <section class="card">
-      <button class="btn ghost" id="btn-logout" style="width:100%;">↩ ${t('nav.logout')}</button>
-    </section>
+    ${isAnon ? `
+      <div class="nudge" style="margin-top:8px;">
+        <h3 style="margin:0;">${t('home.upgrade_title')}</h3>
+        <p style="margin-top:4px;">${t('home.upgrade_desc', { tokens: state.config.upgrade_bonus })}</p>
+        <button class="btn" id="btn-upgrade-set" style="margin-top:12px; padding:10px 14px; font-size:13px;">${t('home.upgrade_cta')}</button>
+      </div>
+    ` : ''}
 
-    <footer class="site-footer" style="margin:24px 0 8px; text-align:center; font-size:11px; color:var(--text-3); line-height:1.6;">
+    <h2>${t('settings.general')}</h2>
+    <div class="card tight" style="padding:0;">
+      <div style="padding:14px 16px; border-bottom:1px solid var(--border);">
+        <div class="row between">
+          <div style="font-weight:500; font-size:14px;">${t('settings.language')}</div>
+          <span class="muted">${{en:'English', ko:'한국어', zh:'中文'}[state.lang]}</span>
+        </div>
+        <div class="row" style="margin-top:10px; gap:6px;">
+          ${[['en','English'],['ko','한국어'],['zh','中文']].map(([k,v]) =>
+            `<button class="btn sm ${state.lang===k?'':'outline'}" data-lang="${k}">${v}</button>`).join('')}
+        </div>
+      </div>
+      <div style="padding:14px 16px;" class="row between">
+        <div>
+          <div style="font-weight:500; font-size:14px;">${t('safety.badge')}</div>
+          <div class="muted" style="margin-top:2px;">${t('safety.subtitle')}</div>
+        </div>
+        <a href="https://github.com/yujoohwan6342-stack/POLY" target="_blank" rel="noopener" style="font-size:13px; font-weight:500; color:var(--text-2);">GitHub →</a>
+      </div>
+    </div>
+
+    <h2>${t('settings.support')}</h2>
+    <div class="card tight" style="padding:0;">
+      <div class="set-row" id="set-disc">
+        <span style="font-size:14px; font-weight:500; flex:1;">${t('disclaimer.title')}</span>
+        <span style="color:var(--text-3);">›</span>
+      </div>
+      <a href="https://github.com/yujoohwan6342-stack/POLY/blob/main/README.md" target="_blank" rel="noopener" class="set-row">
+        <span style="font-size:14px; font-weight:500; flex:1;">${t('settings.support_guide')}</span>
+        <span style="color:var(--text-3);">›</span>
+      </a>
+    </div>
+
+    <h2>${t('settings.account_section')}</h2>
+    <button class="btn outline" id="btn-logout">${t('settings.logout')}</button>
+
+    <p class="muted" style="text-align:center; margin-top:20px; font-size:11px;">${t('settings.version')}</p>
+    <p class="muted" style="text-align:center; margin:4px 0 16px; font-size:11px; line-height:1.5;">
       ${t('disclaimer.footer_short')}
-    </footer>
+    </p>
   `;
   if (isAnon) document.getElementById('btn-upgrade-set').onclick = signInGoogle;
-  const setDisc = document.getElementById('btn-set-disc');
-  if (setDisc) setDisc.onclick = () => openDisclaimerModal();
+  document.getElementById('set-disc').onclick = () => openDisclaimerModal();
   main.querySelectorAll('[data-lang]').forEach(b => {
     b.onclick = async () => { await loadI18n(b.dataset.lang); pageSettings(); };
   });
@@ -1102,64 +1287,95 @@ function startCounter() {
 function renderLanding() {
   const main = document.getElementById('main');
   main.innerHTML = `
-    <section style="padding: 40px 0 24px; text-align:center;">
-      <svg viewBox="0 0 64 64" width="56" height="56" style="margin-bottom:12px;" aria-hidden="true">
-        <defs><linearGradient id="lgrad" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stop-color="#3182f6"/><stop offset="1" stop-color="#1b64da"/>
-        </linearGradient></defs>
-        <rect width="64" height="64" rx="16" fill="url(#lgrad)"/>
-        <path d="M18 42 L28 26 L36 36 L46 20" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        <circle cx="46" cy="20" r="4" fill="white"/>
-      </svg>
-      <div style="font-size: 30px; font-weight: 800; letter-spacing: 0.16em;">STREAK</div>
-      <div style="color: var(--text-3); margin-top: 6px; font-size: 13px;">${t('tagline')}</div>
-    </section>
     <section class="counter">
-      <div class="label"><span class="live-dot"></span>${t('home_counter.label')}</div>
-      <div class="number" id="counter-num">0</div>
-      <div class="subtitle">${t('home_counter.subtitle')}</div>
+      <div class="eyebrow"><span class="live-dot"></span>${t('home_counter.label')}</div>
+      <div class="num" id="counter-num" style="margin-top:10px;">0</div>
+      <div class="muted" style="margin-top:8px;">${t('home_counter.subtitle')}</div>
     </section>
-    <section style="padding: 0 4px;">
-      <h2 style="font-size:22px; line-height:1.3; letter-spacing:-0.02em;">${t('landing.hero_title')}</h2>
-      <p style="font-size:14px; color:var(--text-2); margin-bottom:16px;">${t('landing.hero_sub')}</p>
-      <button class="btn" id="btn-start">${t('landing.cta_start')} →</button>
-    </section>
-    <section style="margin-top:32px;">
-      <div class="grid-2" style="grid-template-columns:1fr; gap:12px;">
-        <div class="card"><h3>⚡ ${t('landing.feature_1_title')}</h3><p style="margin:4px 0 0;font-size:13px;">${t('landing.feature_1_desc')}</p></div>
-        <div class="card"><h3>📊 ${t('landing.feature_2_title')}</h3><p style="margin:4px 0 0;font-size:13px;">${t('landing.feature_2_desc')}</p></div>
-        <div class="card"><h3>🎁 ${t('landing.feature_3_title')}</h3><p style="margin:4px 0 0;font-size:13px;">${t('landing.feature_3_desc')}</p></div>
+
+    <section style="margin-top:8px;">
+      <h1 style="font-size:28px; line-height:1.2;">
+        ${t('landing.hero_title_l1')}<br/>${t('landing.hero_title_l2')}
+      </h1>
+      <p style="margin-bottom:20px;">${t('landing.hero_sub')}</p>
+      <button class="btn lg" id="btn-start">${t('landing.cta_start')}</button>
+      <div class="muted" style="margin-top:10px; text-align:center;">
+        ${t('landing.cta_note')}
       </div>
     </section>
 
-    <section class="safety-block" style="margin-top:32px;">
-      <div class="row" style="gap:6px;align-items:center;margin-bottom:6px;">
-        <span class="chip green">🔒 ${t('safety.badge')}</span>
-      </div>
-      <h2 style="font-size:22px; line-height:1.3; letter-spacing:-0.02em; margin:4px 0;">${t('safety.title')}</h2>
-      <p style="font-size:14px; color:var(--text-2); margin:0 0 16px;">${t('safety.subtitle')}</p>
-      <div class="grid-2" style="grid-template-columns:1fr; gap:12px;">
-        <div class="card"><h3>🔑 ${t('safety.p1_title')}</h3><p style="margin:4px 0 0;font-size:13px; color:var(--text-2);">${t('safety.p1_desc')}</p></div>
-        <div class="card"><h3>💰 ${t('safety.p2_title')}</h3><p style="margin:4px 0 0;font-size:13px; color:var(--text-2);">${t('safety.p2_desc')}</p></div>
-        <div class="card"><h3>📖 ${t('safety.p3_title')}</h3><p style="margin:4px 0 0;font-size:13px; color:var(--text-2);">${t('safety.p3_desc')}</p>
-          <a href="https://github.com/yujoohwan6342-stack/POLY" target="_blank" rel="noopener" style="font-size:12px; display:inline-block; margin-top:6px;">${t('safety.view_source')} →</a>
-        </div>
-        <div class="card"><h3>🗂 ${t('safety.p4_title')}</h3><p style="margin:4px 0 0;font-size:13px; color:var(--text-2);">${t('safety.p4_desc')}</p></div>
-      </div>
-    </section>
+    <h2>${t('landing.how_title')}</h2>
+    <div class="how-step">
+      <div class="num">01</div>
+      <div><div class="ttl">${t('landing.how_1_title')}</div><div class="ds">${t('landing.how_1_desc')}</div></div>
+    </div>
+    <div class="how-step">
+      <div class="num">02</div>
+      <div><div class="ttl">${t('landing.how_2_title')}</div><div class="ds">${t('landing.how_2_desc')}</div></div>
+    </div>
+    <div class="how-step">
+      <div class="num">03</div>
+      <div><div class="ttl">${t('landing.how_3_title')}</div><div class="ds">${t('landing.how_3_desc')}</div></div>
+    </div>
 
-    <section class="risk-block" style="margin-top:24px; padding:16px; border:1px solid rgba(239,68,68,.3); border-radius:12px; background:rgba(239,68,68,.05);">
-      <div style="font-weight:700; color:#ef4444; margin-bottom:6px;">⚠ ${t('disclaimer.title')}</div>
-      <p style="font-size:13px; color:var(--text-2); margin:0 0 8px; line-height:1.6;">${t('disclaimer.short')}</p>
-      <button class="btn ghost sm" id="btn-landing-disc">${t('disclaimer.full_title')} →</button>
-    </section>
+    <h2>${t('landing.diff_title')}</h2>
+    <div class="card tight">
+      <div class="row" style="align-items:flex-start; gap:14px;">
+        <div class="tag-num solid">A</div>
+        <div><h3>${t('landing.diff_a_title')}</h3><p>${t('landing.diff_a_desc')}</p></div>
+      </div>
+    </div>
+    <div class="card tight">
+      <div class="row" style="align-items:flex-start; gap:14px;">
+        <div class="tag-num solid">B</div>
+        <div><h3>${t('landing.diff_b_title')}</h3><p>${t('landing.diff_b_desc')}</p></div>
+      </div>
+    </div>
+    <div class="card tight">
+      <div class="row" style="align-items:flex-start; gap:14px;">
+        <div class="tag-num solid">C</div>
+        <div><h3>${t('landing.diff_c_title')}</h3><p>${t('landing.diff_c_desc')}</p></div>
+      </div>
+    </div>
 
-    <footer class="site-footer" style="margin:32px 0 16px; text-align:center; font-size:11px; color:var(--text-3); line-height:1.6;">
+    <h2>${t('safety.title')}</h2>
+    <div class="card tight">
+      <div class="row" style="align-items:flex-start; gap:14px;">
+        <div class="tag-num">1</div>
+        <div><h3>${t('safety.p1_title')}</h3><p>${t('safety.p1_desc')}</p></div>
+      </div>
+    </div>
+    <div class="card tight">
+      <div class="row" style="align-items:flex-start; gap:14px;">
+        <div class="tag-num">2</div>
+        <div><h3>${t('safety.p2_title')}</h3><p>${t('safety.p2_desc')}</p></div>
+      </div>
+    </div>
+    <div class="card tight">
+      <div class="row" style="align-items:flex-start; gap:14px;">
+        <div class="tag-num">3</div>
+        <div><h3>${t('safety.p3_title')}</h3><p>${t('safety.p3_desc')}</p></div>
+      </div>
+    </div>
+
+    <div style="height:24px;"></div>
+    <button class="btn lg" id="btn-start-2">${t('landing.cta_start')}</button>
+
+    <p class="muted" style="text-align:center; margin-top:14px; font-size:11px; line-height:1.5;">
+      ${t('landing.risk_note')}
+    </p>
+    <div style="text-align:center; margin-top:8px;">
+      <button class="btn link" id="btn-landing-disc" style="font-size:11px;">${t('disclaimer.full_title')} →</button>
+    </div>
+
+    <footer style="margin:32px 0 16px; text-align:center; font-size:11px; color:var(--text-3); line-height:1.6;">
       <div>${t('disclaimer.footer_short')}</div>
-      <div style="margin-top:4px;">© STREAK · <a href="https://github.com/yujoohwan6342-stack/POLY" target="_blank" rel="noopener" style="color:var(--text-3);">GitHub</a></div>
+      <div style="margin-top:4px;">© STREAK · <a href="https://github.com/yujoohwan6342-stack/POLY" target="_blank" rel="noopener" style="color:var(--text-3); text-decoration:underline;">GitHub</a></div>
     </footer>
   `;
   document.getElementById('btn-start').onclick = openSignInModal;
+  const startBtn2 = document.getElementById('btn-start-2');
+  if (startBtn2) startBtn2.onclick = openSignInModal;
   document.getElementById('btn-landing-disc').onclick = () => openDisclaimerModal();
   startCounter();
 }

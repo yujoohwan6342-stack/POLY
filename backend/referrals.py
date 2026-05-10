@@ -143,6 +143,68 @@ class ReferralStats(BaseModel):
     tokens_earned: int
 
 
+class ApplyCodeReq(BaseModel):
+    code: str
+
+
+class ApplyCodeResp(BaseModel):
+    ok: bool
+    tokens: int
+    bonus: int
+    referrer_code: Optional[str] = None
+
+
+@router.post("/apply_code", response_model=ApplyCodeResp)
+def apply_code(req: ApplyCodeReq,
+               user: User = Depends(get_current_user),
+               session: Session = Depends(get_session)):
+    """이미 가입된 사용자가 추천 코드를 사후 입력. 1회만 허용.
+
+    가입자: +REFERRED_BONUS_TOKENS, 추천인: +REFERRAL_L1_TOKENS, L2: +REFERRAL_L2_TOKENS
+    """
+    from fastapi import HTTPException
+    from .tokens import credit
+
+    if user.referred_by_id:
+        raise HTTPException(400, "already_referred")
+
+    code = (req.code or "").strip().upper()
+    if not code or len(code) < 4:
+        raise HTTPException(400, "invalid_code")
+
+    referrer = session.exec(
+        select(User).where(User.referral_code == code)
+    ).first()
+    if not referrer:
+        raise HTTPException(404, "code_not_found")
+    if referrer.id == user.id:
+        raise HTTPException(400, "self_referral")
+
+    user.referred_by_id = referrer.id
+    session.add(user)
+    session.commit()
+
+    credit(session, user, config.REFERRED_BONUS_TOKENS, "referred",
+           ref_id=str(referrer.id),
+           note=f"applied code {referrer.referral_code}")
+    credit(session, referrer, config.REFERRAL_L1_TOKENS, "ref_l1",
+           ref_id=str(user.id),
+           note=f"code applied by {user.firebase_uid[:10]}")
+    if referrer.referred_by_id:
+        l2 = session.get(User, referrer.referred_by_id)
+        if l2:
+            credit(session, l2, config.REFERRAL_L2_TOKENS, "ref_l2",
+                   ref_id=str(user.id),
+                   note=f"L2 via {referrer.firebase_uid[:10]}")
+
+    session.refresh(user)
+    return ApplyCodeResp(
+        ok=True, tokens=user.tokens,
+        bonus=config.REFERRED_BONUS_TOKENS,
+        referrer_code=referrer.referral_code,
+    )
+
+
 @router.get("/stats", response_model=ReferralStats)
 def get_stats(user: User = Depends(get_current_user),
               session: Session = Depends(get_session)):

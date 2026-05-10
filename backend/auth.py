@@ -118,6 +118,8 @@ class SessionResp(BaseModel):
     locale: str
     auth_method: str
     email: Optional[str] = None
+    referred_by_id: Optional[int] = None
+    created_at: Optional[str] = None
 
 
 @router.post("/register", response_model=SessionResp)
@@ -184,4 +186,6 @@ def _to_resp(u: User) -> SessionResp:
         locale=u.locale,
         auth_method=u.auth_method,
         email=u.email,
+        referred_by_id=u.referred_by_id,
+        created_at=u.created_at.isoformat() if u.created_at else None,
     )
