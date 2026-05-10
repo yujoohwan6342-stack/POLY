@@ -1,6 +1,6 @@
 {
   "brand": "STREAK",
-  "tagline": "Polymarket 比特币 5 分钟自动交易",
+  "tagline": "简单的自动交易",
   "nav": {
     "home": "首页",
     "wallet": "钱包",
@@ -27,7 +27,7 @@
     "anonymous": "匿名继续"
   },
   "landing": {
-    "hero_title": "Polymarket BTC 5 分钟市场自动交易",
+    "hero_title": "预测市场自动交易",
     "hero_sub": "设置策略 → 部署机器人 → 睡觉时自动赚",
     "cta_start": "开始交易",
     "cta_explore": "了解更多",

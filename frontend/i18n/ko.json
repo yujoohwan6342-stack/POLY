@@ -1,6 +1,6 @@
 {
   "brand": "STREAK",
-  "tagline": "폴리마켓 BTC 5분 자동매매",
+  "tagline": "심플한 자동 매매",
   "nav": {
     "home": "홈",
     "wallet": "지갑",
@@ -27,7 +27,7 @@
     "anonymous": "익명으로 시작"
   },
   "landing": {
-    "hero_title": "폴리마켓 BTC 5분 마켓 자동 매매",
+    "hero_title": "예측 마켓 자동 매매",
     "hero_sub": "전략 설정 → 봇 실행 → 자는 동안 자동 거래",
     "cta_start": "거래 시작하기",
     "cta_explore": "둘러보기",

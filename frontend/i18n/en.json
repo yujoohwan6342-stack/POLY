@@ -1,6 +1,6 @@
 {
   "brand": "STREAK",
-  "tagline": "Polymarket BTC 5-min auto-trading",
+  "tagline": "Automated trading, made simple",
   "nav": {
     "home": "Home",
     "wallet": "Wallet",
@@ -27,7 +27,7 @@
     "anonymous": "Continue as guest"
   },
   "landing": {
-    "hero_title": "Trade Polymarket BTC 5-min markets automatically",
+    "hero_title": "Trade prediction markets automatically",
     "hero_sub": "Set your strategy, deploy bot, earn while you sleep.",
     "cta_start": "Start trading",
     "cta_explore": "Explore",
