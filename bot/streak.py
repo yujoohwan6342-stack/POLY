@@ -59,6 +59,9 @@ DEFAULT_CONFIG = {
     "buy_order_type": "limit",      # 매수 주문 타입: 'limit' | 'market'
     "sell_order_type": "limit",     # 매도 주문 타입: 'limit' | 'market'
     "max_cycles_per_session": 0,    # 세션당 최대 사이클 수 (0 = 무제한, 1 = 한 번만 매수 후 정지)
+    # ── STREAK Cloud (선택) — 토큰 결제 연동 ─────────────────────
+    "streak_backend": "",           # 비어있으면 토큰 차감 안함 (스탠드얼론 모드)
+    "streak_jwt": "",               # 백엔드 인증 JWT (대시보드에서 발급)
     "poll_interval_sec": 0.5,       # 가격 조회 주기 (초, 1초 이내)
     "taker_fee": 0.0,               # 폴리마켓 0% (실제 정산 기준)
     "maker_fee": 0.0,               # 폴리마켓 0%

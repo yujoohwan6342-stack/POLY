@@ -33,16 +33,16 @@ fi
 chown -R streak:streak "$APP_DIR"
 
 echo "==> Install Python packages"
-pip3 install --break-system-packages -r "$APP_DIR/requirements.txt"
+pip3 install --break-system-packages -r "$APP_DIR/bot/requirements.txt"
 
 echo "==> Install systemd service"
-cp "$APP_DIR/streak.service" /etc/systemd/system/streak.service
+sed "s|/opt/streak|$APP_DIR/bot|" "$APP_DIR/bot/streak.service" > /etc/systemd/system/streak.service
 systemctl daemon-reload
 systemctl enable streak
 systemctl restart streak
 
 echo "==> Configure nginx"
-cp "$APP_DIR/nginx.conf" /etc/nginx/sites-available/streak
+cp "$APP_DIR/bot/nginx.conf" /etc/nginx/sites-available/streak
 [ -n "$DOMAIN" ] && sed -i "s/streak.example.com/$DOMAIN/" /etc/nginx/sites-available/streak
 ln -sf /etc/nginx/sites-available/streak /etc/nginx/sites-enabled/streak
 rm -f /etc/nginx/sites-enabled/default

@@ -1,0 +1,83 @@
+{
+  "brand": "STREAK",
+  "tagline": "Polymarket BTC 5-min auto-trading",
+  "nav": {
+    "home": "Home",
+    "wallet": "Wallet",
+    "referrals": "Referrals",
+    "settings": "Settings",
+    "logout": "Disconnect"
+  },
+  "auth": {
+    "connect": "Connect Wallet",
+    "connecting": "Connecting…",
+    "sign_message": "Sign message",
+    "no_metamask": "MetaMask is not installed",
+    "install_metamask": "Install MetaMask",
+    "wrong_chain": "Switch to Polygon network",
+    "switch_chain": "Switch network",
+    "welcome": "Welcome",
+    "by_signing": "By signing, you agree to our Terms of Use"
+  },
+  "home": {
+    "balance_label": "Token balance",
+    "cycles_left": "{n} cycles available",
+    "topup": "Top up",
+    "invite": "Invite friends",
+    "earned_today": "Earned today",
+    "earned_total": "Total P&L",
+    "active_status": "Bot running",
+    "stopped_status": "Bot stopped",
+    "no_bot": "No bot connected",
+    "deploy_bot": "Deploy bot",
+    "deploy_guide": "Run on your server / VPS in one command"
+  },
+  "wallet": {
+    "title": "Wallet",
+    "your_address": "Your address",
+    "balance": "Token balance",
+    "topup_title": "Top up",
+    "topup_instructions": "Send USDC on Polygon to the address below. Tokens are credited automatically (1¢ = 1 token).",
+    "deposit_address": "Deposit address (Polygon USDC)",
+    "copy": "Copy",
+    "copied": "Copied!",
+    "min_amount": "Minimum $1",
+    "history": "Transaction history",
+    "no_history": "No transactions yet"
+  },
+  "referrals": {
+    "title": "Referrals",
+    "your_code": "Your referral code",
+    "your_link": "Your invite link",
+    "copy_link": "Copy link",
+    "earn_l1": "+{tokens} tokens per direct referral",
+    "earn_l2": "+{tokens} tokens when your referrals invite others",
+    "stats_direct": "Direct invites",
+    "stats_indirect": "Indirect invites",
+    "stats_earned": "Tokens earned",
+    "tree_title": "Your network",
+    "no_referrals": "No referrals yet — share your link to start"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "danger_zone": "Danger zone",
+    "disconnect": "Disconnect wallet"
+  },
+  "common": {
+    "loading": "Loading…",
+    "error": "Something went wrong",
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "tokens": "tokens"
+  },
+  "deploy": {
+    "title": "Deploy Bot",
+    "description": "Run STREAK on your own VPS for security. Your private key never leaves your server.",
+    "step1": "1. Create a Vultr / DigitalOcean / AWS instance (Ubuntu 22.04, $5/mo plan is enough)",
+    "step2": "2. SSH into the server and run:",
+    "step3": "3. Open the dashboard URL shown at the end. Connect your wallet to start trading.",
+    "more_info": "Full guide on GitHub"
+  }
+}
